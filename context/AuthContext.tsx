@@ -117,6 +117,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
   };
 
   const logout = async () => {
+    console.log("hi");
     const { error } = await supabase.auth.signOut();
     if (error) throw new Error(error.message);
     setUser(null);
