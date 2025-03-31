@@ -83,8 +83,16 @@ export default function Login() {
     
     try {
       setError("");
-      await login(email, password);
-      router.replace("/(tabs)");
+      const user = await login(email, password);
+      if(user.activities?.length === 0) 
+      {
+        router.replace("/(auth)/select-activities");
+      }
+      else
+      {
+        router.replace("/(tabs)");
+      }
+      
     } catch (err) {
       setError("Invalid email or password");
     }

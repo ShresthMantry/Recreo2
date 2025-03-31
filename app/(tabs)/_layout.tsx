@@ -75,12 +75,10 @@ export default function TabsLayout() {
   const scaleAnim = useState(new Animated.Value(1))[0];
 
   // Redirect to login if not authenticated
-  if (!user) {
-    return <Redirect href="/(auth)/login" />;
-  }
+  
 
-  const isAdmin = user.role === "admin";
-  const activities = user.activities || [];
+  const isAdmin = user?.role === "admin";
+  const activities = user?.activities || [];
 
   // Update activity tabs and remove duplicates
   useEffect(() => {
@@ -91,6 +89,10 @@ export default function TabsLayout() {
     const uniqueActivities = [...new Set(normalizedActivities)];
     setActivityTabs(uniqueActivities);
   }, [activities]);
+
+  if (!user) {
+    return <Redirect href="/(auth)/login" />;
+  }
 
   // All possible activity routes that exist in the app
   const allPossibleActivities = [
