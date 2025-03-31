@@ -120,7 +120,7 @@ export default function Register() {
     try {
       setError("");
       await register(name, email, password);
-      router.push("/(auth)/select-activities");
+      router.push("/(auth)/login");
     } catch (err) {
       setError("Registration failed. Email may already be in use.");
     }
