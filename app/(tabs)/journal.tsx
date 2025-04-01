@@ -66,6 +66,8 @@ export default function Journal() {
   // Add state for modal visibility
   const [moodModalVisible, setMoodModalVisible] = useState(false);
   
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   // Animation values
@@ -259,50 +261,48 @@ export default function Journal() {
     }
   };
 
+  
   const deleteEntry = async () => {
     try {
       if (!selectedEntryId) return;
-
-      // Enhanced delete confirmation with custom UI
-      Alert.alert(
-        "Delete Journal Entry",
-        "This action cannot be undone.",
-        [
-          { 
-            text: "Cancel", 
-            style: "cancel",
-            onPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-          },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: async () => {
-              setIsLoading(true);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-              
-              const { error } = await supabase
-                .from("journal_")
-                .delete()
-                .eq("id", selectedEntryId);
-
-              if (error) throw error;
-              
-              // After deleting, refresh entries
-              await fetchEntries();
-              await fetchEntriesForDate(selectedDate);
-              
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              
-              // Show success message
-              setSuccessMessage("Journal entry deleted successfully");
-            },
-          },
-        ],
-        { cancelable: true }
-      );
+      
+      // Show the custom delete modal instead of Alert
+      setDeleteModalVisible(true);
+      
     } catch (error) {
       console.error("Error deleting entry:", error);
       Alert.alert("Error", "Failed to delete journal entry");
+      setIsLoading(false);
+    }
+  };
+
+  const confirmDeleteEntry = async () => {
+    try {
+      setIsLoading(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      
+      const { error } = await supabase
+        .from("journal_")
+        .delete()
+        .eq("id", selectedEntryId);
+  
+      if (error) throw error;
+      
+      // After deleting, refresh entries
+      await fetchEntries();
+      await fetchEntriesForDate(selectedDate);
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Show success message
+      setSuccessMessage("Journal entry deleted successfully");
+      
+      // Hide the modal
+      setDeleteModalVisible(false);
+    } catch (error) {
+      console.error("Error deleting entry:", error);
+      Alert.alert("Error", "Failed to delete journal entry");
+    } finally {
       setIsLoading(false);
     }
   };
@@ -490,7 +490,61 @@ export default function Journal() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+<Modal
+  animationType="fade"
+  transparent={true}
+  visible={deleteModalVisible}
+  onRequestClose={() => setDeleteModalVisible(false)}
+>
+  <TouchableOpacity 
+    style={styles.modalOverlay}
+    activeOpacity={1}
+    onPress={() => setDeleteModalVisible(false)}
+  >
+    <Animated.View style={[
+      styles.deleteModal,
+      { 
+        backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+        shadowColor: isDark ? theme.primary : '#000',
+        transform: [{ scale: deleteModalVisible ? 1 : 0.9 }]
+      }
+    ]}>
+      <View style={styles.deleteModalHeader}>
+        <Ionicons name="warning-outline" size={40} color="#ef4444" />
+        <Text style={[styles.deleteModalTitle, { color: theme.text }]}>
+          Delete Journal Entry
+        </Text>
+      </View>
       
+      <Text style={[styles.deleteModalMessage, { color: theme.secondaryText }]}>
+        Are you sure you want to delete this entry? This action cannot be undone.
+      </Text>
+      
+      <View style={styles.deleteModalButtons}>
+        <TouchableOpacity
+          style={[styles.deleteModalButton, styles.cancelDeleteButton, { backgroundColor: isDark ? '#2d2d2d' : '#f3f4f6' }]}
+          onPress={() => {
+            setDeleteModalVisible(false);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+        >
+          <Text style={[styles.cancelDeleteButtonText, { color: theme.secondaryText }]}>Cancel</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.deleteModalButton, styles.confirmDeleteButton]}
+          onPress={confirmDeleteEntry}
+        >
+          <Text style={styles.confirmDeleteButtonText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  </TouchableOpacity>
+</Modal>
+      
+
       {/* Header section */}
       <Animated.View 
         style={[
@@ -1078,5 +1132,60 @@ const styles = StyleSheet.create({
     fontSize: 14, // Smaller font
     fontWeight: '500',
     textAlign: 'center',
+  },
+  deleteModal: {
+    width: '85%',
+    borderRadius: 16,
+    padding: 20,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+    alignItems: 'center',
+  },
+  deleteModalHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  deleteModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  deleteModalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    minWidth: '45%',
+    alignItems: 'center',
+  },
+  cancelDeleteButton: {
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  confirmDeleteButton: {
+    backgroundColor: '#ef4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cancelDeleteButtonText: {
+    fontWeight: '600',
+  },
+  confirmDeleteButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
   },
 });
