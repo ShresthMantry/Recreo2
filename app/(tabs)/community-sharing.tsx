@@ -472,7 +472,7 @@ export default function CommunitySharing() {
                 {uploading ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
-                  <Text style={styles.postButtonText}>Post</Text>
+                  <Text style={styles.postButtonText}> Post </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -723,11 +723,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     elevation: 2,
+    minWidth: 80, // Add minimum width to ensure text fits
+    justifyContent: 'center', // Center the text horizontally
+    alignItems: 'center', // Center the text vertically
   },
   postButtonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+    textAlign: 'center', // Ensure text is centered
   },
   disabledButton: {
     opacity: 0.6,
