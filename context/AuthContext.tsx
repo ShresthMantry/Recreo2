@@ -17,7 +17,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updatedUser: Partial<User>) => Promise<void>;
@@ -72,17 +72,22 @@ export const AuthProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
     });
 
     if (error) throw new Error(error.message);
-    if (data.user) {
-      const userData: User = {
-        name: data.user.user_metadata?.name || "",
-        role: (data.user.user_metadata?.role === "admin" || data.user.user_metadata?.role === "user") 
-          ? data.user.user_metadata.role as "admin" | "user"
-          : "user",
-        email: data.user.email || "",
-        activities: data.user.user_metadata?.activities || []
-      };
-      setUser(userData);
+    if (!data.user) {
+      throw new Error("Login failed: User not found.");
     }
+
+    const userData: User = {
+      name: data.user.user_metadata?.name || "",
+      role: (data.user.user_metadata?.role === "admin" || data.user.user_metadata?.role === "user") 
+        ? data.user.user_metadata.role as "admin" | "user"
+        : "user",
+      email: data.user.email || "",
+      activities: data.user.user_metadata?.activities || []
+    };
+    setUser(userData);
+    console.log(userData);
+    return userData;
+    
   };
 
   const register = async (name: string, email: string, password: string) => {
@@ -112,6 +117,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
   };
 
   const logout = async () => {
+    console.log("hi");
     const { error } = await supabase.auth.signOut();
     if (error) throw new Error(error.message);
     setUser(null);

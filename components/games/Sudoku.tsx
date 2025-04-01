@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../context/ThemeContext";
 
 interface Props {
   onBackToMenu: () => void;
@@ -11,6 +12,7 @@ type SudokuBoard = (number | null)[][];
 type Difficulty = "easy" | "medium" | "hard";
 
 const Sudoku: React.FC<Props> = ({ onBackToMenu }) => {
+  const { theme } = useTheme();
   const [originalBoard, setOriginalBoard] = useState<SudokuBoard>([]);
   const [board, setBoard] = useState<SudokuBoard>([]);
   const [selectedCell, setSelectedCell] = useState<[number, number] | null>(null);
@@ -18,15 +20,17 @@ const Sudoku: React.FC<Props> = ({ onBackToMenu }) => {
   const [timer, setTimer] = useState<number>(0);
   const [isGameActive, setIsGameActive] = useState<boolean>(false);
   const [isGameWon, setIsGameWon] = useState<boolean>(false);
+  const [isGameOver, setIsGameOver] = useState<boolean>(false);
+  const [livesLeft, setLivesLeft] = useState<number>(3);
 
   useEffect(() => {
-    if (isGameActive && !isGameWon) {
+    if (isGameActive && !isGameWon && !isGameOver) {
       const interval = setInterval(() => {
         setTimer(prevTimer => prevTimer + 1);
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [isGameActive, isGameWon]);
+  }, [isGameActive, isGameWon, isGameOver]);
 
   const generateNewGame = () => {
     const newBoard = generateSudokuPuzzle(difficulty);
@@ -36,6 +40,8 @@ const Sudoku: React.FC<Props> = ({ onBackToMenu }) => {
     setTimer(0);
     setIsGameActive(true);
     setIsGameWon(false);
+    setIsGameOver(false);
+    setLivesLeft(3);
   };
 
   const cloneBoard = (board: SudokuBoard): SudokuBoard => {
@@ -47,46 +53,84 @@ const Sudoku: React.FC<Props> = ({ onBackToMenu }) => {
   }, [difficulty]);
 
   const handleCellPress = (row: number, col: number) => {
-    if (originalBoard[row][col] !== null) return; // Can't select pre-filled cells
+    if (originalBoard[row][col] !== null || isGameOver || isGameWon) return; // Can't select pre-filled cells or when game is over
     setSelectedCell([row, col]);
   };
 
+  // Check if a number is valid in the current position
+  const isValidMove = (board: SudokuBoard, row: number, col: number, num: number): boolean => {
+    // Check row
+    for (let i = 0; i < 9; i++) {
+      if (board[row][i] === num) return false;
+    }
+    
+    // Check column
+    for (let i = 0; i < 9; i++) {
+      if (board[i][col] === num) return false;
+    }
+    
+    // Check 3x3 box
+    const boxRow = Math.floor(row / 3) * 3;
+    const boxCol = Math.floor(col / 3) * 3;
+    
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        if (board[boxRow + i][boxCol + j] === num) return false;
+      }
+    }
+    
+    return true;
+  };
+
   const handleNumberInput = (num: number) => {
-    if (!selectedCell || isGameWon) return;
+    if (!selectedCell || isGameWon || isGameOver) return;
     
     const [row, col] = selectedCell;
-    const newBoard = [...board];
-    newBoard[row][col] = num;
-    setBoard(newBoard);
     
-    // Check if the game is won
-    if (isBoardComplete(newBoard) && isBoardValid(newBoard)) {
-      setIsGameWon(true);
-      Alert.alert("Congratulations!", "You've solved the puzzle!", [
-        { text: "OK" }
-      ]);
+    // Check if the move is valid
+    if (isValidMove(board, row, col, num)) {
+      const newBoard = cloneBoard(board);
+      newBoard[row][col] = num;
+      setBoard(newBoard);
+      
+      // Check if the game is won
+      if (isBoardComplete(newBoard)) {
+        setIsGameWon(true);
+        Alert.alert("Congratulations!", "You've solved the puzzle!", [
+          { text: "OK" }
+        ]);
+      }
+    } else {
+      // Invalid move
+      const newLivesLeft = livesLeft - 1;
+      setLivesLeft(newLivesLeft);
+      
+      if (newLivesLeft <= 0) {
+        setIsGameOver(true);
+        Alert.alert("Game Over", "You've lost all your lives!", [
+          { text: "OK" }
+        ]);
+      } else {
+        Alert.alert("Invalid Move", `This number already exists in the row, column, or box. Lives left: ${newLivesLeft}`, [
+          { text: "OK" }
+        ]);
+      }
     }
   };
 
   const handleClearCell = () => {
-    if (!selectedCell || isGameWon) return;
+    if (!selectedCell || isGameWon || isGameOver) return;
     
     const [row, col] = selectedCell;
     if (originalBoard[row][col] !== null) return; // Can't clear pre-filled cells
     
-    const newBoard = [...board];
+    const newBoard = cloneBoard(board);
     newBoard[row][col] = null;
     setBoard(newBoard);
   };
 
   const isBoardComplete = (board: SudokuBoard): boolean => {
     return board.every(row => row.every(cell => cell !== null));
-  };
-
-  const isBoardValid = (board: SudokuBoard): boolean => {
-    // This is a simplified validation - a complete validation would need to check
-    // all rows, columns and 3x3 blocks for duplicates
-    return true;
   };
 
   const formatTime = (seconds: number): string => {
@@ -104,17 +148,20 @@ const Sudoku: React.FC<Props> = ({ onBackToMenu }) => {
         key={`${row}-${col}`}
         style={[
           styles.cell,
-          isSelected && styles.selectedCell,
-          isPrefilled && styles.prefilledCell,
+          { 
+            backgroundColor: isPrefilled ? theme.surfaceHover : theme.surface,
+            borderColor: theme.divider 
+          },
+          isSelected && { backgroundColor: theme.primary + '40' }, // 40 is for opacity
           col % 3 === 2 && col < 8 && styles.rightBorder,
           row % 3 === 2 && row < 8 && styles.bottomBorder,
         ]}
         onPress={() => handleCellPress(row, col)}
-        disabled={isPrefilled}
+        disabled={isPrefilled || isGameOver || isGameWon}
       >
         <Text style={[
           styles.cellText,
-          isPrefilled && styles.prefilledText
+          { color: isPrefilled ? theme.secondaryText : theme.text }
         ]}>
           {value !== null ? value.toString() : ""}
         </Text>
@@ -122,23 +169,108 @@ const Sudoku: React.FC<Props> = ({ onBackToMenu }) => {
     );
   };
 
+  const renderHearts = () => {
+    const hearts = [];
+    
+    for (let i = 0; i < 3; i++) {
+      hearts.push(
+        <Ionicons 
+          key={`heart-${i}`}
+          name={i < livesLeft ? "heart" : "heart-outline"} 
+          size={24} 
+          color={i < livesLeft ? theme.error : theme.secondaryText}
+          style={styles.heartIcon}
+        />
+      );
+    }
+    
+    return hearts;
+  };
+
+  // Create an empty board filled with nulls
+  const createEmptyBoard = (): SudokuBoard => {
+    return Array(9).fill(null).map(() => Array(9).fill(null));
+  };
+
+  // Check if a number can be placed at a specific position
+  const isValid = (board: SudokuBoard, row: number, col: number, num: number): boolean => {
+    // Check row
+    for (let i = 0; i < 9; i++) {
+      if (board[row][i] === num) return false;
+    }
+    
+    // Check column
+    for (let i = 0; i < 9; i++) {
+      if (board[i][col] === num) return false;
+    }
+    
+    // Check 3x3 box
+    const boxRow = Math.floor(row / 3) * 3;
+    const boxCol = Math.floor(col / 3) * 3;
+    
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        if (board[boxRow + i][boxCol + j] === num) return false;
+      }
+    }
+    
+    return true;
+  };
+
+  // Solve the Sudoku board using backtracking
+  const solveSudoku = (board: SudokuBoard): boolean => {
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        if (board[row][col] === null) {
+          // Try placing numbers 1-9
+          const nums = shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+          for (const num of nums) {
+            if (isValid(board, row, col, num)) {
+              board[row][col] = num;
+              
+              if (solveSudoku(board)) {
+                return true;
+              }
+              
+              board[row][col] = null; // Backtrack
+            }
+          }
+          return false; // No valid number found
+        }
+      }
+    }
+    return true; // Board is solved
+  };
+
+  // Shuffle array using Fisher-Yates algorithm
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const newArray = [...array];
+    for (let i = newArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+    }
+    return newArray;
+  };
+
+  // Generate a random solved Sudoku board
+  const generateRandomSolvedBoard = (): SudokuBoard => {
+    const board = createEmptyBoard();
+    
+    // Fill the first row with random numbers
+    const firstRow = shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    for (let i = 0; i < 9; i++) {
+      board[0][i] = firstRow[i];
+    }
+    
+    // Solve the rest of the board
+    solveSudoku(board);
+    return board;
+  };
+
   const generateSudokuPuzzle = (difficulty: Difficulty): SudokuBoard => {
-    // In a real app, you would implement a proper Sudoku generator
-    // This is a simple example with a fixed puzzle
-    
-    const solvedPuzzle: SudokuBoard = [
-      [5, 3, 4, 6, 7, 8, 9, 1, 2],
-      [6, 7, 2, 1, 9, 5, 3, 4, 8],
-      [1, 9, 8, 3, 4, 2, 5, 6, 7],
-      [8, 5, 9, 7, 6, 1, 4, 2, 3],
-      [4, 2, 6, 8, 5, 3, 7, 9, 1],
-      [7, 1, 3, 9, 2, 4, 8, 5, 6],
-      [9, 6, 1, 5, 3, 7, 2, 8, 4],
-      [2, 8, 7, 4, 1, 9, 6, 3, 5],
-      [3, 4, 5, 2, 8, 6, 1, 7, 9]
-    ];
-    
-    const puzzle = cloneBoard(solvedPuzzle);
+    // Generate a random solved board
+    const solvedBoard = generateRandomSolvedBoard();
+    const puzzle = cloneBoard(solvedBoard);
     
     // Define how many cells to remove based on difficulty
     let cellsToRemove;
@@ -158,60 +290,112 @@ const Sudoku: React.FC<Props> = ({ onBackToMenu }) => {
     
     // Remove cells to create the puzzle
     let removedCells = 0;
-    while (removedCells < cellsToRemove) {
-      const row = Math.floor(Math.random() * 9);
-      const col = Math.floor(Math.random() * 9);
+    const positions = shuffleArray(
+      Array.from({ length: 81 }, (_, i) => [Math.floor(i / 9), i % 9] as [number, number])
+    );
+    
+    for (const [row, col] of positions) {
+      if (removedCells >= cellsToRemove) break;
       
-      if (puzzle[row][col] !== null) {
-        puzzle[row][col] = null;
-        removedCells++;
-      }
+      const temp = puzzle[row][col];
+      puzzle[row][col] = null;
+      removedCells++;
     }
     
     return puzzle;
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBackToMenu}>
-          <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Sudoku</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Sudoku</Text>
       </View>
 
       <View style={styles.infoContainer}>
         <View style={styles.difficultyContainer}>
-          <Text style={styles.infoLabel}>Difficulty:</Text>
+          <Text style={[styles.infoLabel, { color: theme.secondaryText }]}>Difficulty:</Text>
           <View style={styles.difficultyButtons}>
             <TouchableOpacity 
-              style={[styles.difficultyButton, difficulty === "easy" && styles.activeDifficulty]}
+              style={[
+                styles.difficultyButton, 
+                { backgroundColor: theme.surfaceHover },
+                difficulty === "easy" && { backgroundColor: theme.primary }
+              ]}
               onPress={() => setDifficulty("easy")}
             >
-              <Text style={[styles.difficultyText, difficulty === "easy" && styles.activeDifficultyText]}>Easy</Text>
+              <Text style={[
+                styles.difficultyText, 
+                { color: theme.secondaryText },
+                difficulty === "easy" && { color: theme.surface, fontWeight: "600" }
+              ]}>Easy</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={[styles.difficultyButton, difficulty === "medium" && styles.activeDifficulty]}
+              style={[
+                styles.difficultyButton, 
+                { backgroundColor: theme.surfaceHover },
+                difficulty === "medium" && { backgroundColor: theme.primary }
+              ]}
               onPress={() => setDifficulty("medium")}
             >
-              <Text style={[styles.difficultyText, difficulty === "medium" && styles.activeDifficultyText]}>Medium</Text>
+              <Text style={[
+                styles.difficultyText, 
+                { color: theme.secondaryText },
+                difficulty === "medium" && { color: theme.surface, fontWeight: "600" }
+              ]}>Medium</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={[styles.difficultyButton, difficulty === "hard" && styles.activeDifficulty]}
+              style={[
+                styles.difficultyButton, 
+                { backgroundColor: theme.surfaceHover },
+                difficulty === "hard" && { backgroundColor: theme.primary }
+              ]}
               onPress={() => setDifficulty("hard")}
             >
-              <Text style={[styles.difficultyText, difficulty === "hard" && styles.activeDifficultyText]}>Hard</Text>
+              <Text style={[
+                styles.difficultyText, 
+                { color: theme.secondaryText },
+                difficulty === "hard" && { color: theme.surface, fontWeight: "600" }
+              ]}>Hard</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.timerContainer}>
-          <Text style={styles.infoLabel}>Time:</Text>
-          <Text style={styles.timerText}>{formatTime(timer)}</Text>
+          <Text style={[styles.infoLabel, { color: theme.secondaryText }]}>Time:</Text>
+          <Text style={[styles.timerText, { color: theme.text }]}>{formatTime(timer)}</Text>
         </View>
       </View>
 
-      <View style={styles.board}>
+      <View style={[styles.statusContainer, { backgroundColor: theme.cardBackground }]}>
+        <View style={styles.livesContainer}>
+          <Text style={[styles.infoLabel, { color: theme.secondaryText }]}>Lives:</Text>
+          <View style={styles.heartsRow}>
+            {renderHearts()}
+          </View>
+        </View>
+        <View style={styles.gameStatusContainer}>
+          <Text style={[styles.infoLabel, { color: theme.secondaryText }]}>Status:</Text>
+          <Text 
+            style={[
+              styles.gameStatusText, 
+              { 
+                color: isGameWon 
+                  ? theme.success 
+                  : isGameOver 
+                    ? theme.error 
+                    : theme.text 
+              }
+            ]}
+          >
+            {isGameWon ? "Won" : isGameOver ? "Game Over" : "Playing"}
+          </Text>
+        </View>
+      </View>
+
+      <View style={[styles.board, { borderColor: theme.divider }]}>
         {board.map((row, rowIndex) => (
           <View key={`row-${rowIndex}`} style={styles.row}>
             {row.map((cell, colIndex) => renderCell(cell, rowIndex, colIndex))}
@@ -224,10 +408,11 @@ const Sudoku: React.FC<Props> = ({ onBackToMenu }) => {
           {[1, 2, 3, 4, 5].map(num => (
             <TouchableOpacity 
               key={`num-${num}`} 
-              style={styles.numPadButton}
+              style={[styles.numPadButton, { backgroundColor: theme.surfaceHover }]}
               onPress={() => handleNumberInput(num)}
+              disabled={isGameOver || isGameWon}
             >
-              <Text style={styles.numPadText}>{num}</Text>
+              <Text style={[styles.numPadText, { color: theme.text }]}>{num}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -235,26 +420,28 @@ const Sudoku: React.FC<Props> = ({ onBackToMenu }) => {
           {[6, 7, 8, 9].map(num => (
             <TouchableOpacity 
               key={`num-${num}`} 
-              style={styles.numPadButton}
+              style={[styles.numPadButton, { backgroundColor: theme.surfaceHover }]}
               onPress={() => handleNumberInput(num)}
+              disabled={isGameOver || isGameWon}
             >
-              <Text style={styles.numPadText}>{num}</Text>
+              <Text style={[styles.numPadText, { color: theme.text }]}>{num}</Text>
             </TouchableOpacity>
           ))}
           <TouchableOpacity 
-            style={[styles.numPadButton, styles.clearButton]}
+            style={[styles.numPadButton, { backgroundColor: theme.elevation2 }]}
             onPress={handleClearCell}
+            disabled={isGameOver || isGameWon}
           >
-            <Ionicons name="backspace-outline" size={24} color="#ffffff" />
+            <Ionicons name="backspace-outline" size={24} color={theme.text} />
           </TouchableOpacity>
         </View>
       </View>
 
       <TouchableOpacity 
-        style={styles.newGameButton} 
+        style={[styles.newGameButton, { backgroundColor: theme.primary }]} 
         onPress={generateNewGame}
       >
-        <Text style={styles.newGameButtonText}>New Game</Text>
+        <Text style={[styles.newGameButtonText, { color: theme.surface }]}>New Game</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -263,7 +450,6 @@ const Sudoku: React.FC<Props> = ({ onBackToMenu }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#121212",
     padding: 16,
   },
   header: {
@@ -277,7 +463,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#ffffff",
   },
   infoContainer: {
     flexDirection: "row",
@@ -291,9 +476,33 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "flex-end",
   },
+  statusContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  livesContainer: {
+    flex: 1,
+  },
+  heartsRow: {
+    flexDirection: "row",
+    marginTop: 4,
+  },
+  heartIcon: {
+    marginRight: 4,
+  },
+  gameStatusContainer: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  gameStatusText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
   infoLabel: {
     fontSize: 14,
-    color: "#9ca3af",
     marginBottom: 4,
   },
   difficultyButtons: {
@@ -304,28 +513,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     marginRight: 8,
     borderRadius: 4,
-    backgroundColor: "#2a2a2a",
-  },
-  activeDifficulty: {
-    backgroundColor: "#448AFF",
   },
   difficultyText: {
-    color: "#9ca3af",
     fontSize: 12,
-  },
-  activeDifficultyText: {
-    color: "#ffffff",
-    fontWeight: "600",
   },
   timerText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#ffffff",
   },
   board: {
     alignSelf: "center",
     borderWidth: 2,
-    borderColor: "#555555",
     marginVertical: 20,
   },
   row: {
@@ -337,30 +535,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 0.5,
-    borderColor: "#333333",
-    backgroundColor: "#222222",
-  },
-  selectedCell: {
-    backgroundColor: "#1e3a5f",
-  },
-  prefilledCell: {
-    backgroundColor: "#2c2c2c",
   },
   rightBorder: {
     borderRightWidth: 2,
-    borderRightColor: "#555555",
   },
   bottomBorder: {
     borderBottomWidth: 2,
-    borderBottomColor: "#555555",
   },
   cellText: {
     fontSize: 16,
-    color: "#ffffff",
-  },
-  prefilledText: {
-    fontWeight: "700",
-    color: "#a0a0a0",
   },
   numPadContainer: {
     marginTop: 16,
@@ -375,20 +558,14 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#2a2a2a",
     borderRadius: 8,
     margin: 4,
   },
-  clearButton: {
-    backgroundColor: "#3e3e3e",
-  },
   numPadText: {
     fontSize: 20,
-    color: "#ffffff",
     fontWeight: "600",
   },
   newGameButton: {
-    backgroundColor: "#448AFF",
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 8,
@@ -397,7 +574,6 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   newGameButtonText: {
-    color: "#ffffff",
     fontSize: 16,
     fontWeight: "600",
   },

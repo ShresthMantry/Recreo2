@@ -10,9 +10,11 @@ import {
   Image,
   FlatList,
   RefreshControl,
+  Animated,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
@@ -68,6 +70,7 @@ export default function CommunitySharing() {
   const [image, setImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState<"feed" | "comments">("feed");
+  const { theme, isDark } = useTheme();
 
   const generateTempId = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -398,39 +401,42 @@ export default function CommunitySharing() {
 
   if (!user) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Community</Text>
-        <Text style={styles.subtitle}>Please log in to access the community</Text>
-      </View>
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+        <StatusBar style={isDark ? "light" : "dark"} />
+        <Text style={[styles.title, { color: theme.text }]}>Community</Text>
+        <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+          Please log in to access the community
+        </Text>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar style={isDark ? "light" : "dark"} />
       
-      <View style={styles.header}>
-        <Text style={styles.title}>Community</Text>
+      <View style={[styles.header, { borderBottomColor: theme.divider }]}>
+        <Text style={[styles.title, { color: theme.text }]}>Community</Text>
         {viewMode === "comments" && (
           <TouchableOpacity
             onPress={() => {
               setViewMode("feed");
               setSelectedPostId(null);
             }}
-            style={styles.backButton}
+            style={[styles.backButton, { backgroundColor: theme.surfaceHover }]}
           >
-            <Ionicons name="arrow-back" size={24} color="#8B5CF6" />
+            <Ionicons name="arrow-back" size={24} color={theme.primary} />
           </TouchableOpacity>
         )}
       </View>
 
       {viewMode === "feed" ? (
         <>
-          <View style={styles.createPostContainer}>
+          <View style={[styles.createPostContainer, { backgroundColor: theme.cardBackground }]}>
             <TextInput
-              style={styles.postInput}
+              style={[styles.postInput, { color: theme.text, backgroundColor: theme.inputBackground }]}
               placeholder="What's on your mind?"
-              placeholderTextColor="#6b7280"
+              placeholderTextColor={theme.secondaryText}
               multiline
               value={newPostContent}
               onChangeText={setNewPostContent}
@@ -439,7 +445,7 @@ export default function CommunitySharing() {
               <View style={styles.imagePreviewContainer}>
                 <Image source={{ uri: image }} style={styles.imagePreview} />
                 <TouchableOpacity
-                  style={styles.removeImageButton}
+                  style={[styles.removeImageButton, { backgroundColor: theme.error }]}
                   onPress={() => setImage(null)}
                 >
                   <Ionicons name="close" size={20} color="white" />
@@ -447,14 +453,18 @@ export default function CommunitySharing() {
               </View>
             )}
             <View style={styles.postActions}>
-              <TouchableOpacity onPress={pickImage} style={styles.actionButton}>
-                <Ionicons name="image-outline" size={24} color="#8B5CF6" />
-                <Text style={styles.actionButtonText}>Add Image</Text>
+              <TouchableOpacity 
+                onPress={pickImage} 
+                style={[styles.actionButton, { backgroundColor: theme.surfaceHover }]}
+              >
+                <Ionicons name="image-outline" size={24} color={theme.primary} />
+                <Text style={[styles.actionButtonText, { color: theme.text }]}>Add Image</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={createPost}
                 style={[
                   styles.postButton,
+                  { backgroundColor: theme.primary },
                   (!newPostContent.trim() || uploading) && styles.disabledButton,
                 ]}
                 disabled={uploading || !newPostContent.trim()}
@@ -462,7 +472,7 @@ export default function CommunitySharing() {
                 {uploading ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
-                  <Text style={styles.postButtonText}>Post</Text>
+                  <Text style={styles.postButtonText}> Post </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -470,7 +480,7 @@ export default function CommunitySharing() {
 
           {isLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#8B5CF6" />
+              <ActivityIndicator size="large" color={theme.primary} />
             </View>
           ) : (
             <FlatList
@@ -480,23 +490,46 @@ export default function CommunitySharing() {
                 <RefreshControl
                   refreshing={isRefreshing}
                   onRefresh={handleRefresh}
-                  tintColor="#8B5CF6"
+                  tintColor={theme.primary}
                 />
               }
               renderItem={({ item }) => (
-                <View style={styles.postContainer}>
+                <Animated.View 
+                  style={[
+                    styles.postContainer, 
+                    { backgroundColor: theme.cardBackground }
+                  ]}
+                >
                   <View style={styles.postHeader}>
-                    <Text style={styles.postUsername}>{item.username}</Text>
-                    <Text style={styles.postDate}>{formatDate(item.created_at)}</Text>
+                    <View style={styles.userInfo}>
+                      <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
+                        <Text style={styles.avatarText}>
+                          {item.username.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={[styles.postUsername, { color: theme.text }]}>
+                          {item.username}
+                        </Text>
+                        <Text style={[styles.postDate, { color: theme.secondaryText }]}>
+                          {formatDate(item.created_at)}
+                        </Text>
+                      </View>
+                    </View>
                     {item.user_email === user.email && (
                       <TouchableOpacity
                         onPress={() => deletePost(item.id)}
-                        style={styles.deleteButton}
+                        style={[styles.deleteButton, { backgroundColor: theme.surfaceHover }]}
                       >
-                        <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                        <Ionicons name="trash-outline" size={18} color={theme.error} />
                       </TouchableOpacity>
                     )}
                   </View>
+                  
+                  <Text style={[styles.postContent, { color: theme.text }]}>
+                    {item.content}
+                  </Text>
+                  
                   {item.image_url && (
                     <Image
                       source={{ uri: item.image_url }}
@@ -504,31 +537,36 @@ export default function CommunitySharing() {
                       resizeMode="cover"
                     />
                   )}
-                  <Text style={styles.postContent}>{item.content}</Text>
+                  
                   <TouchableOpacity
                     onPress={() => {
                       setSelectedPostId(item.id);
                       setViewMode("comments");
                     }}
-                    style={styles.commentButton}
+                    style={[styles.commentButton, { backgroundColor: theme.surfaceHover }]}
                   >
-                    <Ionicons name="chatbubble-outline" size={18} color="#8B5CF6" />
-                    <Text style={styles.commentButtonText}>Comments</Text>
+                    <Ionicons name="chatbubble-outline" size={18} color={theme.primary} />
+                    <Text style={[styles.commentButtonText, { color: theme.primary }]}>
+                      Comments
+                    </Text>
                   </TouchableOpacity>
-                </View>
+                </Animated.View>
               )}
               ListEmptyComponent={
-                <Text style={styles.emptyState}>No posts yet. Be the first to share!</Text>
+                <Text style={[styles.emptyState, { color: theme.secondaryText }]}>
+                  No posts yet. Be the first to share!
+                </Text>
               }
               contentContainerStyle={styles.postsList}
             />
           )}
         </>
       ) : (
+        // Comments View
         <>
           {selectedPostId && posts.find((p) => p.id === selectedPostId) && (
-            <View style={styles.commentsHeader}>
-              <Text style={styles.commentsTitle}>
+            <View style={[styles.commentsHeader, { backgroundColor: theme.cardBackground }]}>
+              <Text style={[styles.commentsTitle, { color: theme.text }]}>
                 Comments on {posts.find((p) => p.id === selectedPostId)?.username}'s post
               </Text>
             </View>
@@ -538,45 +576,62 @@ export default function CommunitySharing() {
             data={comments}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <View style={styles.commentContainer}>
+              <View style={[styles.commentContainer, { backgroundColor: theme.cardBackground }]}>
                 <View style={styles.commentHeader}>
-                  <Text style={styles.commentUsername}>{item.username}</Text>
-                  <Text style={styles.commentDate}>{formatDate(item.created_at)}</Text>
+                  <View style={styles.userInfo}>
+                    <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
+                      <Text style={styles.avatarText}>
+                        {item.username.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={[styles.commentUsername, { color: theme.text }]}>
+                      {item.username}
+                    </Text>
+                  </View>
+                  <Text style={[styles.commentDate, { color: theme.secondaryText }]}>
+                    {formatDate(item.created_at)}
+                  </Text>
                   {item.user_email === user.email && (
                     <TouchableOpacity
                       onPress={() => deleteComment(item.id)}
-                      style={styles.deleteButton}
+                      style={[styles.deleteButton, { backgroundColor: theme.surfaceHover }]}
                     >
-                      <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                      <Ionicons name="trash-outline" size={18} color={theme.error} />
                     </TouchableOpacity>
                   )}
                 </View>
-                <Text style={styles.commentContent}>{item.content}</Text>
+                <Text style={[styles.commentContent, { color: theme.text }]}>{item.content}</Text>
               </View>
             )}
-            contentContainerStyle={styles.commentsList}
             ListEmptyComponent={
-              <Text style={styles.emptyState}>No comments yet. Be the first to comment!</Text>
+              <Text style={[styles.emptyState, { color: theme.secondaryText }]}>
+                No comments yet. Be the first to comment!
+              </Text>
             }
           />
-
-          <View style={styles.addCommentContainer}>
+          
+          <View style={[styles.commentInputContainer, { backgroundColor: theme.cardBackground }]}>
             <TextInput
-              style={styles.commentInput}
+              style={[styles.commentInput, { 
+                color: theme.text, 
+                backgroundColor: theme.inputBackground,
+                borderColor: theme.inputBorder
+              }]}
               placeholder="Write a comment..."
-              placeholderTextColor="#6b7280"
+              placeholderTextColor={theme.secondaryText}
               value={newCommentContent}
               onChangeText={setNewCommentContent}
             />
             <TouchableOpacity
               onPress={addComment}
               style={[
-                styles.commentPostButton,
+                styles.sendButton,
+                { backgroundColor: theme.primary },
                 !newCommentContent.trim() && styles.disabledButton,
               ]}
               disabled={!newCommentContent.trim()}
             >
-              <Text style={styles.commentPostButtonText}>Post</Text>
+              <Ionicons name="send" size={20} color="white" />
             </TouchableOpacity>
           </View>
         </>
@@ -588,218 +643,268 @@ export default function CommunitySharing() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#121212",
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#2d2d2d",
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#9ca3af",
-    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   backButton: {
     padding: 8,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+  },
+  subtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 20,
   },
   createPostContainer: {
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#2d2d2d",
+    borderRadius: 12,
+    margin: 16,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   postInput: {
-    backgroundColor: "#1e1e1e",
-    color: "#ffffff",
+    minHeight: 100,
     borderRadius: 8,
     padding: 12,
-    minHeight: 100,
-    marginBottom: 12,
     fontSize: 16,
+    textAlignVertical: 'top',
   },
   imagePreviewContainer: {
-    position: "relative",
-    marginBottom: 12,
+    marginTop: 12,
+    position: 'relative',
   },
   imagePreview: {
-    width: "100%",
+    width: '100%',
     height: 200,
     borderRadius: 8,
   },
   removeImageButton: {
-    position: "absolute",
+    position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    borderRadius: 15,
     width: 30,
     height: 30,
-    justifyContent: "center",
-    alignItems: "center",
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   postActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
   },
   actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 8,
+    borderRadius: 8,
   },
   actionButtonText: {
-    color: "#8B5CF6",
-    marginLeft: 4,
-    fontWeight: "500",
+    marginLeft: 8,
+    fontSize: 16,
   },
   postButton: {
-    backgroundColor: "#8B5CF6",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  disabledButton: {
-    backgroundColor: "#4B3385",
-    opacity: 0.7,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 20,
+    elevation: 2,
+    minWidth: 80, // Add minimum width to ensure text fits
+    justifyContent: 'center', // Center the text horizontally
+    alignItems: 'center', // Center the text vertically
   },
   postButtonText: {
-    color: "#ffffff",
-    fontWeight: "600",
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+    textAlign: 'center', // Ensure text is centered
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  postsList: {
-    paddingBottom: 16,
+  disabledButton: {
+    opacity: 0.6,
   },
   postContainer: {
-    backgroundColor: "#1e1e1e",
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    marginHorizontal: 16,
+    margin: 16,
+    marginTop: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   postHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   postUsername: {
-    color: "#8B5CF6",
-    fontWeight: "600",
     fontSize: 16,
+    fontWeight: 'bold',
   },
   postDate: {
-    color: "#6b7280",
     fontSize: 12,
-  },
-  deleteButton: {
-    padding: 4,
-  },
-  postImage: {
-    width: "100%",
-    height: 200,
-    borderRadius: 8,
-    marginBottom: 12,
   },
   postContent: {
-    color: "#ffffff",
     fontSize: 16,
-    marginBottom: 12,
+    lineHeight: 24,
+    padding: 16,
+    paddingTop: 0,
+  },
+  postImage: {
+    width: '100%',
+    height: 300,
   },
   commentButton: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
   },
   commentButtonText: {
-    color: "#8B5CF6",
-    marginLeft: 4,
-    fontWeight: "500",
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
   },
   emptyState: {
-    color: "#6b7280",
-    textAlign: "center",
-    marginTop: 32,
-    paddingHorizontal: 16,
-  },
-  commentsHeader: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#2d2d2d",
-  },
-  commentsTitle: {
-    color: "#ffffff",
-    fontWeight: "600",
-    fontSize: 18,
-  },
-  commentsList: {
-    paddingBottom: 80,
-  },
-  commentContainer: {
-    backgroundColor: "#1e1e1e",
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-    marginHorizontal: 16,
-  },
-  commentHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  commentUsername: {
-    color: "#8B5CF6",
-    fontWeight: "500",
-    fontSize: 14,
-  },
-  commentDate: {
-    color: "#6b7280",
-    fontSize: 12,
-  },
-  commentContent: {
-    color: "#ffffff",
-    fontSize: 14,
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 20,
   },
   addCommentContainer: {
-    position: "absolute",
+    position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "#121212",
+    backgroundColor: 'rgba(0,0,0,0.6)',
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#2d2d2d",
-    flexDirection: "row",
-    alignItems: "center",
+    borderTopColor: 'rgba(0,0,0,0.1)',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   commentInput: {
     flex: 1,
-    backgroundColor: "#1e1e1e",
-    color: "#ffffff",
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    color: 'white',
     borderRadius: 8,
     padding: 12,
     marginRight: 8,
   },
   commentPostButton: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 8,
   },
   commentPostButtonText: {
-    color: "#ffffff",
-    fontWeight: "600",
+    color: 'white',
+    fontWeight: '600',
+  },
+  // Add missing styles for comments section
+  commentsHeader: {
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  commentsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  commentContainer: {
+    padding: 16,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  commentUsername: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  commentDate: {
+    fontSize: 12,
+  },
+  commentContent: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginTop: 8,
+  },
+  commentInputContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    borderTopWidth: 1,
+    alignItems: 'center',
+  },
+  
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 16,
+  },
+  
+  // Add the missing loadingContainer style
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  postsList: {
+    paddingBottom: 20,
   },
 });
