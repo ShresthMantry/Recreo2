@@ -1,7 +1,9 @@
 // components/games/Minesweeper.tsx
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Platform, Dimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../context/ThemeContext";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface Props {
   onBackToMenu: () => void;
@@ -17,7 +19,11 @@ interface Cell {
 type Difficulty = "easy" | "medium" | "hard";
 type GameStatus = "waiting" | "playing" | "won" | "lost";
 
+const { width } = Dimensions.get("window");
+const cellSize = Math.min(28, (width - 40) / 12);
+
 const Minesweeper: React.FC<Props> = ({ onBackToMenu }) => {
+  const { theme, isDark } = useTheme();
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [board, setBoard] = useState<Cell[][]>([[]]);
   const [gameStatus, setGameStatus] = useState<GameStatus>("waiting");
@@ -219,13 +225,13 @@ const Minesweeper: React.FC<Props> = ({ onBackToMenu }) => {
   const getCellContent = (cell: Cell) => {
     if (!cell.isRevealed) {
       if (cell.isFlagged) {
-        return <Ionicons name="flag" size={14} color="#FF5252" />;
+        return <Ionicons name="flag" size={cellSize * 0.6} color={theme.accent} />;
       }
       return null;
     }
     
     if (cell.hasMine) {
-      return <Ionicons name="close-circle" size={14} color="#FF5252" />;
+      return <Ionicons name="alert-circle" size={cellSize * 0.6} color={theme.error} />;
     }
     
     if (cell.adjacentMines === 0) {
@@ -233,14 +239,14 @@ const Minesweeper: React.FC<Props> = ({ onBackToMenu }) => {
     }
     
     const colors = [
-      "#448AFF", // 1 - Blue
-      "#4CAF50", // 2 - Green
-      "#FF5252", // 3 - Red
-      "#673AB7", // 4 - Purple
-      "#FF9800", // 5 - Orange
-      "#00BCD4", // 6 - Cyan
-      "#000000", // 7 - Black
-      "#9E9E9E"  // 8 - Grey
+      theme.primary,     // 1
+      theme.success,     // 2
+      theme.error,       // 3
+      theme.secondary,   // 4
+      theme.accent,      // 5
+      theme.primary,     // 6
+      theme.text,        // 7
+      theme.secondaryText // 8
     ];
     
     return (
@@ -252,66 +258,95 @@ const Minesweeper: React.FC<Props> = ({ onBackToMenu }) => {
   
   const renderBoard = () => {
     return (
-      <View style={styles.board}>
-        {board.map((row, rowIndex) => (
-          <View key={`row-${rowIndex}`} style={styles.row}>
-            {row.map((cell, colIndex) => (
-              <TouchableOpacity
-                key={`cell-${rowIndex}-${colIndex}`}
-                style={[
-                  styles.cell,
-                  cell.isRevealed && styles.revealedCell
-                ]}
-                onPress={() => handleCellPress(rowIndex, colIndex)}
-              >
-                {getCellContent(cell)}
-              </TouchableOpacity>
-            ))}
-          </View>
-        ))}
+      <View style={[styles.boardContainer, { backgroundColor: theme.cardBackground }]}>
+        <View style={[styles.board, { borderColor: theme.divider }]}>
+          {board.map((row, rowIndex) => (
+            <View key={`row-${rowIndex}`} style={styles.row}>
+              {row.map((cell, colIndex) => (
+                <TouchableOpacity
+                  key={`cell-${rowIndex}-${colIndex}`}
+                  style={[
+                    styles.cell,
+                    { 
+                      width: cellSize, 
+                      height: cellSize,
+                      backgroundColor: cell.isRevealed 
+                        ? isDark ? theme.elevation1 : '#e0e0e0'
+                        : isDark ? theme.elevation2 : '#ffffff',
+                      borderColor: theme.divider,
+                      // Add shadow for unrevealed cells to create depth
+                      elevation: cell.isRevealed ? 0 : 2,
+                      // Add inner shadow effect for revealed cells
+                      ...(cell.isRevealed ? {
+                        borderWidth: 1,
+                        borderColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.1)',
+                      } : {
+                        borderWidth: 1,
+                        borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                      })
+                    }
+                  ]}
+                  onPress={() => handleCellPress(rowIndex, colIndex)}
+                >
+                  {getCellContent(cell)}
+                </TouchableOpacity>
+              ))}
+            </View>
+          ))}
+        </View>
       </View>
     );
   };
   
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBackToMenu}>
-          <Ionicons name="arrow-back" size={24} color="#ffffff" />
+        <TouchableOpacity 
+          style={[styles.backButton, { backgroundColor: theme.cardBackground }]} 
+          onPress={onBackToMenu}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Minesweeper</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Minesweeper</Text>
       </View>
       
       <View style={styles.controlBar}>
-        <View style={styles.infoSection}>
-          <Ionicons name="flag" size={18} color="#FF5252" />
-          <Text style={styles.infoText}>{flagsRemaining}</Text>
+        <View style={[styles.infoSection, { backgroundColor: theme.cardBackground }]}>
+          <Ionicons name="flag" size={18} color={theme.accent} />
+          <Text style={[styles.infoText, { color: theme.text }]}>{flagsRemaining}</Text>
         </View>
         
         <View style={styles.difficultyButtons}>
-          <TouchableOpacity 
-            style={[styles.difficultyButton, difficulty === "easy" && styles.activeDifficulty]}
-            onPress={() => setDifficulty("easy")}
-          >
-            <Text style={[styles.difficultyText, difficulty === "easy" && styles.activeDifficultyText]}>Easy</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.difficultyButton, difficulty === "medium" && styles.activeDifficulty]}
-            onPress={() => setDifficulty("medium")}
-          >
-            <Text style={[styles.difficultyText, difficulty === "medium" && styles.activeDifficultyText]}>Medium</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.difficultyButton, difficulty === "hard" && styles.activeDifficulty]}
-            onPress={() => setDifficulty("hard")}
-          >
-            <Text style={[styles.difficultyText, difficulty === "hard" && styles.activeDifficultyText]}>Hard</Text>
-          </TouchableOpacity>
+          {["easy", "medium", "hard"].map((level) => (
+            <TouchableOpacity 
+              key={level}
+              style={[
+                styles.difficultyButton, 
+                { 
+                  backgroundColor: difficulty === level ? theme.primary : theme.cardBackground,
+                  borderColor: theme.divider
+                }
+              ]}
+              onPress={() => setDifficulty(level as Difficulty)}
+            >
+              <Text 
+                style={[
+                  styles.difficultyText, 
+                  { 
+                    color: difficulty === level ? theme.surface : theme.secondaryText,
+                    fontWeight: difficulty === level ? "600" : "400"
+                  }
+                ]}
+              >
+                {level.charAt(0).toUpperCase() + level.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
         
-        <View style={styles.infoSection}>
-          <Ionicons name="time-outline" size={18} color="#ffffff" />
-          <Text style={styles.infoText}>{formatTime(timer)}</Text>
+        <View style={[styles.infoSection, { backgroundColor: theme.cardBackground }]}>
+          <Ionicons name="time-outline" size={18} color={theme.text} />
+          <Text style={[styles.infoText, { color: theme.text }]}>{formatTime(timer)+" "}</Text>
         </View>
       </View>
       
@@ -319,32 +354,64 @@ const Minesweeper: React.FC<Props> = ({ onBackToMenu }) => {
       
       <View style={styles.controls}>
         <TouchableOpacity 
-          style={[styles.controlButton, flagMode && styles.activeControlButton]}
+          style={[
+            styles.controlButton,
+            { 
+              backgroundColor: flagMode ? theme.primary : theme.cardBackground,
+              borderColor: theme.divider
+            }
+          ]}
           onPress={() => setFlagMode(!flagMode)}
         >
-          <Ionicons name="flag" size={24} color={flagMode ? "#ffffff" : "#FF5252"} />
-          <Text style={[styles.controlText, flagMode && styles.activeControlText]}>
-            {flagMode ? "Flag Mode ON" : "Flag Mode"}
-          </Text>
+          <LinearGradient
+            colors={flagMode ? [theme.primary, theme.secondary] as const : [theme.cardBackground, theme.cardBackground] as const}
+            style={styles.controlButtonGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Ionicons 
+              name="flag" 
+              size={24} 
+              color={flagMode ? theme.surface : theme.accent} 
+            />
+            <Text 
+              style={[
+                styles.controlText, 
+                { 
+                  color: flagMode ? theme.surface : theme.text,
+                  fontWeight: flagMode ? "600" : "500"
+                }
+              ]}
+            >
+              {flagMode ? "Flag Mode ON" : "Flag Mode"}
+            </Text>
+          </LinearGradient>
         </TouchableOpacity>
         
         <TouchableOpacity 
-          style={styles.controlButton}
+          style={[styles.controlButton, { backgroundColor: theme.cardBackground, borderColor: theme.divider }]}
           onPress={initializeGame}
         >
-          <Ionicons name="refresh" size={24} color="#ffffff" />
-          <Text style={styles.controlText}>New Game</Text>
+          <LinearGradient
+            colors={[theme.cardBackground, theme.cardBackground] as const}
+            style={styles.controlButtonGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Ionicons name="refresh" size={24} color={theme.primary} />
+            <Text style={[styles.controlText, { color: theme.text }]}>New Game</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#121212",
     padding: 16,
+    paddingTop: Platform.OS === 'android' ? 30 : 16,
   },
   header: {
     flexDirection: "row",
@@ -353,11 +420,22 @@ const styles = StyleSheet.create({
   },
   backButton: {
     marginRight: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "700",
-    color: "#ffffff",
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
+    letterSpacing: 0.5,
   },
   controlBar: {
     flexDirection: "row",
@@ -368,90 +446,105 @@ const styles = StyleSheet.create({
   infoSection: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2a2a2a",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   infoText: {
-    color: "#ffffff",
     fontWeight: "600",
     fontSize: 16,
-    marginLeft: 4,
+    marginLeft: 6,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
   },
   difficultyButtons: {
     flexDirection: "row",
+    justifyContent: "center",
   },
   difficultyButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     marginHorizontal: 4,
-    borderRadius: 6,
-    backgroundColor: "#2a2a2a",
-  },
-  activeDifficulty: {
-    backgroundColor: "#66BB6A",
+    borderRadius: 12,
+    borderWidth: 1,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   difficultyText: {
-    color: "#9ca3af",
-    fontSize: 12,
+    fontSize: 13,
+    textAlign: "center",
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
-  activeDifficultyText: {
-    color: "#ffffff",
-    fontWeight: "600",
+  boardContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    borderRadius: 16,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    marginVertical: 10,
   },
   board: {
-    alignSelf: "center",
     borderWidth: 2,
-    borderColor: "#444444",
-    borderRadius: 4,
-    marginVertical: 20,
+    borderRadius: 8,
+    overflow: "hidden",
   },
   row: {
     flexDirection: "row",
   },
   cell: {
-    width: 28,
-    height: 28,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#2a2a2a",
     borderWidth: 1,
-    borderColor: "#444444",
-  },
-  revealedCell: {
-    backgroundColor: "#1a1a1a",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
   },
   cellText: {
     fontWeight: "bold",
     fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
   },
   controls: {
     flexDirection: "row",
     justifyContent: "space-around",
     marginTop: 20,
+    marginBottom: 10,
   },
   controlButton: {
-    backgroundColor: "#2a2a2a",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    width: "45%",
+  },
+  controlButtonGradient: {
     flexDirection: "row",
     alignItems: "center",
-    minWidth: 140,
     justifyContent: "center",
-  },
-  activeControlButton: {
-    backgroundColor: "#66BB6A",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    width: "100%",
   },
   controlText: {
-    color: "#ffffff",
     marginLeft: 8,
-    fontWeight: "500",
-  },
-  activeControlText: {
-    color: "#ffffff",
-    fontWeight: "600",
+    fontSize: 15,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
 });
 
