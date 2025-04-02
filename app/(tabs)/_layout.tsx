@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     borderRadius: 22.5, // Half of width/height
     alignSelf: "center",
   },
-  indicator: {
+indicatorStyle: {
     position: "absolute",
     height: 4, // Increased from 3
     width: 30, // Increased from 25

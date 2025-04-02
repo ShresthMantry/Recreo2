@@ -90,7 +90,7 @@ export default function More() {
     });
   }, []);
 
-  const navigateToActivity = (activity) => {
+  const navigateToActivity = (activity: { name: string }) => {
     // Provide haptic feedback when selecting an activity
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
@@ -102,7 +102,7 @@ export default function More() {
     }
   };
 
-  const getActivityGradient = (activity) => {
+  const getActivityGradient = (activity: { name: string }) => {
     switch(activity.name.toLowerCase()) {
       case 'music': return ['#9C27B0', '#7B1FA2'];
       case 'drawing': return ['#F44336', '#D32F2F'];
@@ -114,7 +114,7 @@ export default function More() {
     }
   };
 
-  const renderItem = ({ item, index }) => {
+  const renderItem = ({ item, index }: { item: { name: string; icon: string }; index: number }) => {
     const gradientColors = getActivityGradient(item);
     
     // Create a pulse animation for the card
@@ -163,11 +163,21 @@ export default function More() {
             end={{ x: 1, y: 1 }}
           >
             <View style={styles.iconContainer}>
-              <Ionicons name={item.icon} size={32} color="#FFFFFF" />
+              <Ionicons 
+                name={item.icon as keyof typeof Ionicons.glyphMap} 
+                size={32} 
+                color="#FFFFFF" 
+              />
             </View>
-            <Text style={styles.activityName}>{item.name.replace('-', ' ')}</Text>
+            <Text style={styles.activityName}>
+              {item.name.replace(/-/g, ' ')}
+            </Text>
             <View style={styles.arrowContainer}>
-              <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
+              <Ionicons 
+                name="chevron-forward" 
+                size={24} 
+                color="#FFFFFF" 
+              />
             </View>
           </LinearGradient>
         </TouchableOpacity>
