@@ -157,7 +157,7 @@ export default function More() {
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={gradientColors}
+            colors={gradientColors as [string, string]}
             style={styles.gradientBackground}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}

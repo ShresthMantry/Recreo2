@@ -154,7 +154,7 @@ export default function Home() {
       type = 'community-sharing';
     }
     const route = `/(tabs)/${type.toLowerCase()}`;
-    router.push(route);
+    router.push(route as any); // Type assertion to handle route string
   };
 
   const getActivityColor = (type: string) => {
@@ -217,7 +217,7 @@ export default function Home() {
           ]}
         >
           <View style={styles.quoteIconContainer}>
-            <Ionicons name="quote" size={20} color={theme.primary} />
+            <Ionicons name="chatbubble-ellipses" size={20} color={theme.primary} />
           </View>
           <Text style={[styles.quoteText, { color: theme.text }]}>"{quote.quote}"</Text>
           <Text style={[styles.quoteAuthor, { color: theme.secondaryText }]}>— {quote.author}</Text>
@@ -245,7 +245,7 @@ export default function Home() {
                 activeOpacity={0.7}
               >
                 <LinearGradient
-                  colors={getActivityColor(activity.toLowerCase())}
+                  colors={getActivityColor(activity.toLowerCase()) as [string, string]}
                   style={styles.quickActionGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
@@ -330,12 +330,23 @@ export default function Home() {
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={getActivityColor(activity.type)}
+                    colors={getActivityColor(activity.type) as [string, string]}
                     style={styles.activityIconContainer}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                   >
-                    <Ionicons name={activity.icon} size={20} color="#FFFFFF" />
+                    <Ionicons 
+                      name={
+                        activity.type === 'journal' ? 'journal' :
+                        activity.type === 'games' ? 'game-controller' :
+                        activity.type === 'community-sharing' ? 'people' :
+                        activity.type === 'music' ? 'musical-notes' :
+                        activity.type === 'drawing' ? 'brush' :
+                        activity.type === 'books' ? 'book' : 'apps'
+                      } 
+                      size={20} 
+                      color="#FFFFFF" 
+                    />
                   </LinearGradient>
                   <View style={styles.activityDetails}>
                     <Text style={[styles.activityTitle, { color: theme.text }]}>{activity.title}</Text>
