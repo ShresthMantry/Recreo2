@@ -3,87 +3,63 @@ import { Tabs } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect } from "expo-router";
-import { StyleSheet, Animated, View, Dimensions, Pressable, Platform } from "react-native";
+import { StyleSheet, Animated, View, Dimensions, Pressable, ViewProps } from "react-native";
 import type { PressableProps } from "react-native";
-import { useTheme } from "../../context/ThemeContext";
-import * as Haptics from 'expo-haptics';
-import { BlurView } from 'expo-blur';
 
 const { width } = Dimensions.get("window");
 
 const styles = StyleSheet.create({
   tabBar: {
-    position: 'absolute',
-    bottom: 16,
-    left: '50%', // Center horizontally
-    transform: [{ translateX: (width * 0.075) }], // Adjust for width
-    height: 65, // Increase the height of the navbar
-    borderRadius: 28,
-    paddingBottom: 0,
-    paddingTop: 0,
+    backgroundColor: "#121212",
+    borderTopColor: "transparent", // Remove the white line
+    height: 65,
+    paddingBottom: 5,
     elevation: 8,
     shadowColor: "#8B5CF6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    backgroundColor: 'transparent',
-    borderTopWidth: 0,
-    width: width * 0.85, // Set width to 85% of screen width
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  tabBarInner: {
-    overflow: 'hidden',
-    borderRadius: 28,
-    flex: 1,
-  },
-  tabBarContent: {
-    flexDirection: 'row',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'space-between', // Change from 'space-around' to 'space-between'
+  tabLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 4,
+    opacity: 0.9,
+    color: "#ffffff",
   },
   tabIcon: {
-    marginBottom: 0,
+    marginBottom: -2,
   },
   tabItem: {
-    height: 70, // Match the height of the tab items with the navbar
+    height: 60,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 0,
-    paddingBottom: 0,
-    // width: 48,
-    paddingLeft: 40,
-    marginTop: -2, // Move items up a bit
   },
   indicator: {
     position: "absolute",
-    height: 3,
-    width: 25,
-    borderRadius: 1.5,
-    bottom: 8,
-    transform: [{ translateX: -12.5 }],
+    height: 4,
+    width: 40,
+    borderRadius: 2,
+    backgroundColor: "#8B5CF6",
+    bottom: 5, // Adjusted for better placement
+    transform: [{ translateX: -20 }],
   },
   activeTabBackground: {
     position: "absolute",
-    height: 45, // Increased from 35
-    width: 45, // Increased from 35
-    borderRadius: 22.5, // Half of width/height
-    alignSelf: "center",
-  },
-  indicator: {
-    position: "absolute",
-    height: 4, // Increased from 3
-    width: 30, // Increased from 25
-    borderRadius: 2, // Half of height
-    bottom: 8,
-    transform: [{ translateX: -15 }], // Half of width
+    height: 32,
+    borderRadius: 12,
+    backgroundColor: "rgba(139, 92, 246, 0.25)", // Softer shade
+    top: 5,
+    alignSelf: "center", // Ensure it's centered properly
   },
   glow: {
     position: "absolute",
-    width: 30, // Increased from 25
-    height: 15, // Increased from 12
-    borderRadius: 15, // Half of width
-    top: 0,
-    opacity: 0.4,
+    width: 40, // Reduced to fit better
+    height: 20, // Adjusted for a subtle effect
+    backgroundColor: "rgba(139, 92, 246, 0.3)",
+    borderRadius: 25,
+    top: -10, // Lowered to fit well
+    opacity: 0.7,
   }
 });
 
@@ -93,15 +69,15 @@ interface TabBarButtonProps extends PressableProps {
 
 export default function TabsLayout() {
   const { user } = useAuth();
-  const { theme, isDark } = useTheme();
   const [activityTabs, setActivityTabs] = useState<string[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const translateX = useState(new Animated.Value(0))[0];
   const scaleAnim = useState(new Animated.Value(1))[0];
-  const pulseAnim = useState(new Animated.Value(1))[0];
 
   // Redirect to login if not authenticated
   
+
+  const isAdmin = user?.role === "admin";
   const activities = user?.activities || [];
 
   // Update activity tabs and remove duplicates
@@ -111,8 +87,7 @@ export default function TabsLayout() {
       activity.toLowerCase().replace(" ", "-")
     );
     const uniqueActivities = [...new Set(normalizedActivities)];
-    // Limit to only 3 activities
-    setActivityTabs(uniqueActivities.slice(0, 3));
+    setActivityTabs(uniqueActivities);
   }, [activities]);
 
   if (!user) {
@@ -129,15 +104,11 @@ export default function TabsLayout() {
     "games"
   ];
 
-  // Animation for tab change with haptic feedback
+  // Animation for tab change
   const animateTab = (index: number) => {
-    // Trigger haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    // Fixed number of tabs: home + 3 activities + more + settings = 6
-    const numTabs = 6;
-    const tabWidth = (width - 48) / numTabs; // Account for left/right padding
-    const offsetX = index * tabWidth + (tabWidth / 2 - 12.5);
+    // Calculate tab width based on total visible tabs
+    const tabWidth = width / (2 + activityTabs.filter(a => allPossibleActivities.includes(a)).length + (isAdmin ? 1 : 0));
+    const offsetX = index * tabWidth + (tabWidth / 2 - 20);
 
     Animated.parallel([
       Animated.timing(translateX, {
@@ -147,7 +118,7 @@ export default function TabsLayout() {
       }),
       Animated.sequence([
         Animated.timing(scaleAnim, {
-          toValue: 1.1,
+          toValue: 1.2,
           duration: 150,
           useNativeDriver: true,
         }),
@@ -157,76 +128,36 @@ export default function TabsLayout() {
           useNativeDriver: true,
         }),
       ]),
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]),
     ]).start();
 
     setActiveIndex(index);
   };
 
-  // Only include home, 3 activities, more, settings
-  const visibleTabs = ["index", ...activityTabs.filter(a => allPossibleActivities.includes(a)).slice(0, 3), "more", "settings"];
-
   return (
     <Tabs
       screenOptions={({ route }) => {
-        const indexOfRoute = visibleTabs.indexOf(route.name);
+        // Find the index of the current tab
+        const tabRoutes = ["index", ...activityTabs.filter(a => allPossibleActivities.includes(a)), "more", "settings", ...(isAdmin ? ["admin"] : [])];
+        const indexOfRoute = tabRoutes.indexOf(route.name);
         
         return {
           headerShown: false,
           tabBarStyle: styles.tabBar,
-          tabBarActiveTintColor: theme.primary,
-          tabBarInactiveTintColor: isDark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)",
-          tabBarShowLabel: false,
+          tabBarActiveTintColor: "#8B5CF6",
+          tabBarInactiveTintColor: "#9ca3af",
+          tabBarLabelStyle: styles.tabLabel,
           tabBarIconStyle: styles.tabIcon,
           tabBarItemStyle: styles.tabItem,
-          tabBarBackground: () => (
-            <BlurView 
-            intensity={isDark ? 10 : 30} 
-              tint={isDark ? "dark" : "light"} 
-              style={styles.tabBarInner}
-            >
-              <View style={[
-                styles.tabBarContent, 
-                { backgroundColor: isDark ? 'rgba(15,15,15,0.95)' : 'rgba(255,255,255,0.95)' } // Increased light mode opacity to 0.95
-              ]} />
-            </BlurView>
-          ),
           tabBarButton: (props: TabBarButtonProps) => {
             const { onPress, children, ...otherProps } = props;
-            
-            // Only show button for visible tabs
-            if (indexOfRoute === -1) {
-              return null;
-            }
-            
             return (
-              <View style={{ position: 'relative', flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{ position: 'relative', flex: 1 }}>
                 {activeIndex === indexOfRoute && (
                   <Animated.View
                     style={[
                       styles.activeTabBackground,
                       {
-                        backgroundColor: isDark 
-                          ? `${theme.primary}30` // 20% opacity
-                          : `${theme.primary}20`, // 15% opacity
-                        transform: [
-                          { scale: scaleAnim },
-                          { translateY: pulseAnim.interpolate({
-                            inputRange: [1, 1.1],
-                            outputRange: [0, -1]
-                          })}
-                        ],
+                        transform: [{ scale: scaleAnim }],
                       },
                     ]}
                   />
@@ -238,14 +169,7 @@ export default function TabsLayout() {
                     animateTab(indexOfRoute);
                   }}
                   style={({ pressed }) => [
-                    { 
-                      opacity: pressed ? 0.8 : 1,
-                      transform: [{ scale: pressed ? 0.95 : 1 }],
-                      width: '100%',
-                      height: '100%',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    },
+                    { opacity: pressed ? 0.8 : 1 },
                   ]}
                 >
                   {children}
@@ -260,19 +184,13 @@ export default function TabsLayout() {
       <Animated.View 
         style={[
           styles.indicator, 
-          { 
-            backgroundColor: theme.primary,
-            transform: [{ translateX }] 
-          }
+          { transform: [{ translateX }] }
         ]} 
       />
       <Animated.View 
         style={[
           styles.glow, 
-          { 
-            backgroundColor: `${theme.primary}40`,
-            transform: [{ translateX }] 
-          }
+          { transform: [{ translateX }] }
         ]} 
       />
 
@@ -281,18 +199,18 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, size, focused }) => (
             <Ionicons 
               name={focused ? "home" : "home-outline"} 
               color={color} 
-              size={26} // Increased from 22 to 26
+              size={size} 
             />
           ),
         }}
       />
 
-      {/* Dynamically show selected activities (limited to 3) */}
-      {activityTabs.slice(0, 3).map((activity, idx) => {
+      {/* Dynamically show selected activities */}
+      {activityTabs.map((activity, idx) => {
         // Skip if activity isn't in our valid routes
         if (!allPossibleActivities.includes(activity)) {
           return null;
@@ -304,7 +222,7 @@ export default function TabsLayout() {
             name={activity}
             options={{
               title: activity.charAt(0).toUpperCase() + activity.slice(1).replace("-", " "),
-              tabBarIcon: ({ color, focused }) => {
+              tabBarIcon: ({ color, size, focused }) => {
                 let iconName: keyof typeof Ionicons.glyphMap;
                 let outlineName: keyof typeof Ionicons.glyphMap;
                 switch (activity) {
@@ -340,7 +258,7 @@ export default function TabsLayout() {
                   <Ionicons 
                     name={focused ? iconName : outlineName} 
                     color={color} 
-                    size={26} // Increased from 22 to 26
+                    size={size} 
                   />
                 );
               },
@@ -351,7 +269,7 @@ export default function TabsLayout() {
 
       {/* Hide unselected activities */}
       {allPossibleActivities
-        .filter(activity => !visibleTabs.includes(activity))
+        .filter(activity => !activityTabs.includes(activity))
         .map(activity => (
           <Tabs.Screen
             key={`hidden-${activity}`}
@@ -365,11 +283,11 @@ export default function TabsLayout() {
         name="more"
         options={{
           title: "More",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, size, focused }) => (
             <Ionicons 
-              name={focused ? "apps" : "apps-outline"} 
+              name={focused ? "ellipsis-horizontal" : "ellipsis-horizontal-outline"} 
               color={color} 
-              size={26} // Increased from 22 to 26
+              size={size} 
             />
           ),
         }}
@@ -379,17 +297,32 @@ export default function TabsLayout() {
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, size, focused }) => (
             <Ionicons 
               name={focused ? "settings" : "settings-outline"} 
               color={color} 
-              size={26} // Increased from 22 to 26
+              size={size} 
             />
           ),
         }}
       />
 
-      {/* Admin tab is removed */}
+      {/* Admin tab (conditional) */}
+      {isAdmin && (
+        <Tabs.Screen
+          name="admin"
+          options={{
+            title: "Admin",
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons 
+                name={focused ? "shield" : "shield-outline"} 
+                color={color} 
+                size={size} 
+              />
+            ),
+          }}
+        />
+      )}
     </Tabs>
   );
 }

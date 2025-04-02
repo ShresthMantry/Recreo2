@@ -71,11 +71,6 @@ export default function CommunitySharing() {
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState<"feed" | "comments">("feed");
   const { theme, isDark } = useTheme();
-  
-  // Search and filter state
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "content" | "username">("all");
-  const [showFilterOptions, setShowFilterOptions] = useState(false);
 
   const generateTempId = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -404,37 +399,6 @@ export default function CommunitySharing() {
     return format(new Date(dateString), "MMM d, h:mm a");
   };
 
-  // Filter posts based on search query and filter type
-  const filteredPosts = posts.filter(post => {
-    if (!searchQuery.trim()) return true;
-    
-    const query = searchQuery.toLowerCase();
-    
-    switch (filterType) {
-      case "content":
-        return post.content.toLowerCase().includes(query);
-      case "username":
-        return post.username.toLowerCase().includes(query);
-      case "all":
-      default:
-        return (
-          post.content.toLowerCase().includes(query) ||
-          post.username.toLowerCase().includes(query)
-        );
-    }
-  });
-
-  // Toggle filter options visibility
-  const toggleFilterOptions = () => {
-    setShowFilterOptions(!showFilterOptions);
-  };
-
-  // Set filter type and hide options
-  const setFilter = (type: "all" | "content" | "username") => {
-    setFilterType(type);
-    setShowFilterOptions(false);
-  };
-
   if (!user) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
@@ -468,76 +432,6 @@ export default function CommunitySharing() {
 
       {viewMode === "feed" ? (
         <>
-          {/* Search bar */}
-          <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground }]}>
-            <View style={[styles.searchInputWrapper, { backgroundColor: theme.inputBackground }]}>
-              <Ionicons name="search" size={20} color={theme.secondaryText} style={styles.searchIcon} />
-              <TextInput
-                style={[styles.searchInput, { color: theme.text }]}
-                placeholder="Search posts..."
-                placeholderTextColor={theme.secondaryText}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity 
-                  onPress={() => setSearchQuery("")}
-                  style={styles.clearButton}
-                >
-                  <Ionicons name="close-circle" size={20} color={theme.secondaryText} />
-                </TouchableOpacity>
-              )}
-            </View>
-            <TouchableOpacity 
-              onPress={toggleFilterOptions}
-              style={[styles.filterButton, { backgroundColor: theme.surfaceHover }]}
-            >
-              <Ionicons name="filter" size={20} color={theme.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Filter options */}
-          {showFilterOptions && (
-            <View style={[styles.filterOptions, { backgroundColor: theme.cardBackground }]}>
-              <TouchableOpacity 
-                style={[
-                  styles.filterOption, 
-                  filterType === "all" && { backgroundColor: theme.surfaceHover }
-                ]}
-                onPress={() => setFilter("all")}
-              >
-                <Text style={[styles.filterOptionText, { color: theme.text }]}>All</Text>
-                {filterType === "all" && (
-                  <Ionicons name="checkmark" size={18} color={theme.primary} />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.filterOption, 
-                  filterType === "content" && { backgroundColor: theme.surfaceHover }
-                ]}
-                onPress={() => setFilter("content")}
-              >
-                <Text style={[styles.filterOptionText, { color: theme.text }]}>Content</Text>
-                {filterType === "content" && (
-                  <Ionicons name="checkmark" size={18} color={theme.primary} />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.filterOption, 
-                  filterType === "username" && { backgroundColor: theme.surfaceHover }
-                ]}
-                onPress={() => setFilter("username")}
-              >
-                <Text style={[styles.filterOptionText, { color: theme.text }]}>Username</Text>
-                {filterType === "username" && (
-                  <Ionicons name="checkmark" size={18} color={theme.primary} />
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-
           <View style={[styles.createPostContainer, { backgroundColor: theme.cardBackground }]}>
             <TextInput
               style={[styles.postInput, { color: theme.text, backgroundColor: theme.inputBackground }]}
@@ -590,7 +484,7 @@ export default function CommunitySharing() {
             </View>
           ) : (
             <FlatList
-              data={filteredPosts}
+              data={posts}
               keyExtractor={(item) => item.id}
               refreshControl={
                 <RefreshControl
@@ -660,9 +554,7 @@ export default function CommunitySharing() {
               )}
               ListEmptyComponent={
                 <Text style={[styles.emptyState, { color: theme.secondaryText }]}>
-                  {searchQuery.trim() 
-                    ? "No posts match your search criteria." 
-                    : "No posts yet. Be the first to share!"}
+                  No posts yet. Be the first to share!
                 </Text>
               }
               contentContainerStyle={styles.postsList}
@@ -774,63 +666,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 20,
   },
-  // Search bar styles
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
-  },
-  searchInputWrapper: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 40,
-    fontSize: 16,
-  },
-  clearButton: {
-    padding: 4,
-  },
-  filterButton: {
-    marginLeft: 8,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Filter options styles
-  filterOptions: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  filterOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-  },
-  filterOptionText: {
-    fontSize: 16,
-  },
   createPostContainer: {
     padding: 16,
     borderRadius: 12,
     margin: 16,
-    marginTop: 8,
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -908,7 +747,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  
   postHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1069,5 +907,4 @@ const styles = StyleSheet.create({
   postsList: {
     paddingBottom: 20,
   },
-  
 });
