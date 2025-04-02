@@ -20,9 +20,11 @@ import Slider from "@react-native-community/slider";
 import * as SecureStore from "expo-secure-store";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { useFocusEffect } from "@react-navigation/native";
+import { useTheme } from "../../context/ThemeContext"; // Import theme context
+import { LinearGradient } from "expo-linear-gradient"; // Import LinearGradient for beautiful gradients
 
 // Environment variables - In a real app, use expo-constants or .env file
-const YOUTUBE_API_KEY = "AIzaSyAWUBzgPnvzvMjBi-IjeW-YCfTE97Cm4Nc";
+const YOUTUBE_API_KEY = "AIzaSyBnnELuNcrlf_ACP9qm9Gbooi5Eg-xehlY";
 const YOUTUBE_API_BASE_URL = "https://www.googleapis.com/youtube/v3";
 
 // Types
@@ -48,6 +50,9 @@ interface Track {
 }
 
 export default function YouTubeMusicPlayer() {
+  // Get theme from context
+  const { theme, isDark } = useTheme();
+  
   // State variables
   const [tracks, setTracks] = useState<Track[]>([]);
   const [favorites, setFavorites] = useState<Track[]>([]);
@@ -325,7 +330,12 @@ export default function YouTubeMusicPlayer() {
       <TouchableOpacity
         style={[
           styles.trackItem,
-          isActive && styles.activeTrackItem
+          { 
+            backgroundColor: isActive 
+              ? isDark ? theme.surfaceHover : 'rgba(98, 0, 238, 0.08)' 
+              : isDark ? theme.surface : '#fff',
+            borderColor: isDark ? theme.divider : 'rgba(0,0,0,0.08)'
+          }
         ]}
         onPress={() => playTrack(item)}
       >
@@ -338,12 +348,14 @@ export default function YouTubeMusicPlayer() {
             numberOfLines={1} 
             style={[
               styles.trackTitle, 
-              isActive && styles.activeText
+              { color: isActive ? theme.primary : theme.text }
             ]}
           >
             {item.snippet.title}
           </Text>
-          <Text style={styles.artistName}>{item.snippet.channelTitle}</Text>
+          <Text style={[styles.artistName, { color: theme.secondaryText }]}>
+            {item.snippet.channelTitle}
+          </Text>
         </View>
         <TouchableOpacity 
           style={styles.favoriteButton}
@@ -352,16 +364,16 @@ export default function YouTubeMusicPlayer() {
           <MaterialIcons
             name={isFavorite ? "favorite" : "favorite-border"}
             size={24}
-            color={isFavorite ? "#ff3b5c" : "#888"}
+            color={isFavorite ? theme.accent : theme.secondaryText}
           />
         </TouchableOpacity>
       </TouchableOpacity>
     );
-  }, [currentTrack, favorites, playTrack, toggleFavorite]);
+  }, [currentTrack, favorites, playTrack, toggleFavorite, theme, isDark]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       {/* YouTube Player */}
       {currentTrack && (
@@ -393,32 +405,39 @@ export default function YouTubeMusicPlayer() {
       )}
 
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Music Player</Text>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
+      <LinearGradient
+        colors={[isDark ? theme.elevation2 : theme.primary, isDark ? theme.background : theme.primary + '80']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.header}
+      >
+        <Text style={[styles.title, { color: "#fff" }]}>Music Player</Text>
+        <View style={[styles.searchContainer, { backgroundColor: isDark ? theme.inputBackground : 'rgba(255,255,255,0.2)' }]}>
+          <Ionicons name="search" size={20} color="#fff" style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: "#fff" }]}
             placeholder="Search for music..."
+            placeholderTextColor="rgba(255,255,255,0.7)"
             value={searchQuery}
             onChangeText={setSearchQuery}
             clearButtonMode="while-editing"
           />
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Tabs */}
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { backgroundColor: theme.cardBackground, borderBottomColor: theme.divider }]}>
         <TouchableOpacity
           style={[
             styles.tabButton,
-            activeTab === 'discover' && styles.activeTabButton
+            activeTab === 'discover' && [styles.activeTabButton, { borderBottomColor: theme.primary }]
           ]}
           onPress={() => setActiveTab('discover')}
         >
           <Text style={[
             styles.tabText,
-            activeTab === 'discover' && styles.activeTabText
+            { color: theme.secondaryText },
+            activeTab === 'discover' && [styles.activeTabText, { color: theme.primary }]
           ]}>
             Discover
           </Text>
@@ -426,13 +445,14 @@ export default function YouTubeMusicPlayer() {
         <TouchableOpacity
           style={[
             styles.tabButton,
-            activeTab === 'favorites' && styles.activeTabButton
+            activeTab === 'favorites' && [styles.activeTabButton, { borderBottomColor: theme.primary }]
           ]}
           onPress={() => setActiveTab('favorites')}
         >
           <Text style={[
             styles.tabText,
-            activeTab === 'favorites' && styles.activeTabText
+            { color: theme.secondaryText },
+            activeTab === 'favorites' && [styles.activeTabText, { color: theme.primary }]
           ]}>
             Favorites ({favorites.length})
           </Text>
@@ -442,16 +462,16 @@ export default function YouTubeMusicPlayer() {
       {/* Track List */}
       {isLoading && filteredTracks.length === 0 ? (
         <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color="#ff3b5c" />
+          <ActivityIndicator size="large" color={theme.accent} />
         </View>
       ) : filteredTracks.length === 0 ? (
         <View style={styles.emptyContainer}>
           <MaterialIcons 
             name={activeTab === 'favorites' ? "favorite" : "music-note"} 
             size={50} 
-            color="#ddd" 
+            color={theme.divider} 
           />
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: theme.secondaryText }]}>
             {activeTab === 'favorites' 
               ? "No favorites yet" 
               : "No tracks found"}
@@ -460,14 +480,19 @@ export default function YouTubeMusicPlayer() {
       ) : (
         <FlatList
           data={filteredTracks}
-          keyExtractor={(item) => item.id.videoId}
+          keyExtractor={(item, index) => `${item.id.videoId}-${index}`}
           renderItem={renderTrackItem}
-          contentContainerStyle={styles.trackList}
+          contentContainerStyle={[
+            styles.trackList, 
+            { 
+              paddingBottom: currentTrack ? (Platform.OS === 'android' ? 300 : 280) : 100 
+            }
+          ]}
           onEndReached={activeTab === 'discover' ? () => nextPageToken && searchTracks(searchQuery, nextPageToken) : undefined}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
             isLoading && filteredTracks.length > 0 ? (
-              <ActivityIndicator size="small" color="#ff3b5c" />
+              <ActivityIndicator size="small" color={theme.accent} />
             ) : null
           }
         />
@@ -475,83 +500,99 @@ export default function YouTubeMusicPlayer() {
 
       {/* Player Controls */}
       {currentTrack && (
-        <View style={styles.playerContainer}>
-          <View style={styles.nowPlayingBar}>
-            <Image
-              source={{ uri: currentTrack.snippet.thumbnails.medium.url }}
-              style={styles.playerThumbnail}
-            />
-            <View style={styles.nowPlayingInfo}>
-              <Text numberOfLines={1} style={styles.nowPlayingTitle}>
-                {currentTrack.snippet.title}
-              </Text>
-              <Text style={styles.nowPlayingArtist}>
-                {currentTrack.snippet.channelTitle}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => toggleFavorite(currentTrack)}>
-              <MaterialIcons
-                name={currentTrack.favorite ? "favorite" : "favorite-border"}
-                size={24}
-                color={currentTrack.favorite ? "#ff3b5c" : "#888"}
+        <View 
+          style={[
+            styles.playerContainer, 
+            { 
+              backgroundColor: isDark ? theme.elevation2 : '#fff', // White background for light mode
+              borderTopColor: theme.divider,
+              borderTopWidth: 1,
+              shadowColor: isDark ? "#000" : "#666",
+              shadowOffset: { width: 0, height: -3 },
+              shadowOpacity: isDark ? 0.2 : 0.15,
+              shadowRadius: 5,
+              elevation: 10,
+            }
+          ]}
+        >
+          <View style={{ paddingBottom: Platform.OS === 'android' ? 25 : 0 }}>
+            <View style={styles.nowPlayingBar}>
+              <Image
+                source={{ uri: currentTrack.snippet.thumbnails.medium.url }}
+                style={styles.playerThumbnail}
               />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.progressContainer}>
-            <Text style={styles.timeText}>{formatTime(position)}</Text>
-            <Slider
-              style={styles.progressBar}
-              minimumValue={0}
-              maximumValue={duration}
-              value={position}
-              onSlidingComplete={seekTo}
-              minimumTrackTintColor="#ff3b5c"
-              maximumTrackTintColor="#d3d3d3"
-              thumbTintColor="#ff3b5c"
-            />
-            <Text style={styles.timeText}>{formatTime(duration)}</Text>
-          </View>
-
-          <View style={styles.controls}>
-            <TouchableOpacity onPress={() => setIsShuffle(!isShuffle)}>
-              <Ionicons
-                name="shuffle"
-                size={22}
-                color={isShuffle ? "#ff3b5c" : "#888"}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={playPreviousTrack}>
-              <Ionicons name="play-skip-back" size={30} color="#333" />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.playButton}
-              onPress={togglePlayPause}
-            >
-              {isBuffering ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Ionicons
-                  name={isPlaying ? "pause" : "play"}
-                  size={30}
-                  color="#fff"
+              <View style={styles.nowPlayingInfo}>
+                <Text numberOfLines={1} style={[styles.nowPlayingTitle, { color: theme.text }]}>
+                  {currentTrack.snippet.title}
+                </Text>
+                <Text style={[styles.nowPlayingArtist, { color: theme.secondaryText }]}>
+                  {currentTrack.snippet.channelTitle}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => toggleFavorite(currentTrack)}>
+                <MaterialIcons
+                  name={currentTrack.favorite ? "favorite" : "favorite-border"}
+                  size={24}
+                  color={currentTrack.favorite ? theme.primary : theme.secondaryText}
                 />
-              )}
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity onPress={playNextTrack}>
-              <Ionicons name="play-skip-forward" size={30} color="#333" />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setIsRepeat(!isRepeat)}>
-              <Ionicons
-                name="repeat"
-                size={22}
-                color={isRepeat ? "#ff3b5c" : "#888"}
+            <View style={styles.progressContainer}>
+              <Text style={[styles.timeText, { color: theme.secondaryText }]}>{formatTime(position)}</Text>
+              <Slider
+                style={styles.progressBar}
+                minimumValue={0}
+                maximumValue={duration}
+                value={position}
+                onSlidingComplete={seekTo}
+                minimumTrackTintColor={theme.primary}
+                maximumTrackTintColor={isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'}
+                thumbTintColor={theme.primary}
               />
-            </TouchableOpacity>
+              <Text style={[styles.timeText, { color: theme.secondaryText }]}>{formatTime(duration)}</Text>
+            </View>
+
+            <View style={styles.controls}>
+              <TouchableOpacity onPress={() => setIsShuffle(!isShuffle)}>
+                <Ionicons
+                  name="shuffle"
+                  size={22}
+                  color={isShuffle ? theme.primary : theme.secondaryText}
+                />
+              </TouchableOpacity>
+              
+              <TouchableOpacity onPress={playPreviousTrack}>
+                <Ionicons name="play-skip-back" size={30} color={theme.text} />
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.playButton, { backgroundColor: theme.primary }]}
+                onPress={togglePlayPause}
+              >
+                {isBuffering ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons
+                    name={isPlaying ? "pause" : "play"}
+                    size={30}
+                    color="#fff"
+                  />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={playNextTrack}>
+                <Ionicons name="play-skip-forward" size={30} color={theme.text} />
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setIsRepeat(!isRepeat)}>
+                <Ionicons
+                  name="repeat"
+                  size={22}
+                  color={isRepeat ? theme.primary : theme.secondaryText}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       )}
@@ -562,7 +603,6 @@ export default function YouTubeMusicPlayer() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9f9f9",
   },
   hiddenPlayer: {
     opacity: 0,
@@ -570,24 +610,28 @@ const styles = StyleSheet.create({
     width: 0,
   },
   header: {
-    padding: 15,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    padding: 20,
+    paddingTop: 15,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    marginBottom: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "bold",
-    color: "#ff3b5c",
-    marginBottom: 10,
+    marginBottom: 15,
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f0f0f0",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 40,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    height: 45,
   },
   searchIcon: {
     marginRight: 10,
@@ -599,26 +643,24 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    marginHorizontal: 10,
+    marginBottom: 5,
   },
   tabButton: {
     flex: 1,
     alignItems: "center",
     paddingVertical: 15,
-    borderBottomWidth: 2,
+    borderBottomWidth: 3,
     borderBottomColor: "transparent",
   },
   activeTabButton: {
-    borderBottomColor: "#ff3b5c",
+    borderBottomWidth: 3,
   },
   tabText: {
     fontSize: 16,
-    color: "#888",
   },
   activeTabText: {
-    color: "#ff3b5c",
     fontWeight: "bold",
   },
   loaderContainer: {
@@ -632,79 +674,91 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyText: {
-    marginTop: 10,
+    marginTop: 15,
     fontSize: 16,
-    color: "#888",
   },
   trackList: {
-    paddingBottom: 150,
+    paddingHorizontal: 10,
   },
   trackItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  activeTrackItem: {
-    backgroundColor: "rgba(255, 59, 92, 0.1)",
+    padding: 12,
+    marginVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   thumbnail: {
-    width: 50,
-    height: 50,
-    borderRadius: 5,
+    width: 55,
+    height: 55,
+    borderRadius: 8,
   },
   trackInfo: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
   },
   trackTitle: {
     fontSize: 16,
-    color: "#333",
-  },
-  activeText: {
-    color: "#ff3b5c",
-    fontWeight: "bold",
+    fontWeight: "600",
+    marginBottom: 4,
   },
   artistName: {
     fontSize: 14,
-    color: "#888",
   },
   favoriteButton: {
-    padding: 5,
+    padding: 8,
   },
-  playerContainer: {
+  playerGradient: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
+    height: 200,
+    paddingTop: 50,
+  },
+  playerContainer: {
+    position: "absolute",
+    bottom: Platform.OS === 'android' ? 60 : 80, // Adjust to position above tab bar
+    left: 0,
+    right: 0,
     padding: 15,
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderRadius: 20,
+    marginHorizontal: 10, // Add some margin on the sides
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 10,
+    zIndex: 1000,
   },
   nowPlayingBar: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 15,
   },
   playerThumbnail: {
-    width: 50,
-    height: 50,
-    borderRadius: 5,
+    width: 55,
+    height: 55,
+    borderRadius: 8,
   },
   nowPlayingInfo: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
   },
   nowPlayingTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    marginBottom: 4,
   },
   nowPlayingArtist: {
     fontSize: 14,
-    color: "#666",
   },
   progressContainer: {
     flexDirection: "row",
@@ -718,7 +772,6 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 12,
-    color: "#888",
     width: 40,
     textAlign: "center",
   },
@@ -727,13 +780,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
+    marginTop: 5,
   },
   playButton: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#ff3b5c",
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
