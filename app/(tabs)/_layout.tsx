@@ -192,13 +192,13 @@ export default function TabsLayout() {
           tabBarItemStyle: styles.tabItem,
           tabBarBackground: () => (
             <BlurView 
-              intensity={isDark ? 40 : 60} 
+            intensity={isDark ? 10 : 30} 
               tint={isDark ? "dark" : "light"} 
               style={styles.tabBarInner}
             >
               <View style={[
                 styles.tabBarContent, 
-                { backgroundColor: isDark ? 'rgba(25,25,25,0.75)' : 'rgba(255,255,255,0.75)' }
+                { backgroundColor: isDark ? 'rgba(15,15,15,0.95)' : 'rgba(255,255,255,0.95)' } // Increased light mode opacity to 0.95
               ]} />
             </BlurView>
           ),
