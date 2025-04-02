@@ -24,6 +24,8 @@ import { format, parseISO } from "date-fns";
 import { createClient } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
+import DateTimePicker from '@react-native-community/datetimepicker';
+
 
 const supabase = createClient(
   "https://ysavghvmswenmddlnshr.supabase.co",
@@ -76,6 +78,8 @@ export default function Journal() {
   const slideAnim = useRef(new Animated.Value(20)).current;
   const successAnim = useRef(new Animated.Value(0)).current;
   const contentScrollRef = useRef<ScrollView>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerAnim] = useState(new Animated.Value(0));
 
   const moods = [
     { label: "Great", value: "great", icon: "sunny-outline", color: "#FFD700" },
@@ -260,6 +264,31 @@ export default function Journal() {
       setIsSaving(false);
     }
   };
+
+  // Function to handle date selection from date picker
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    
+    if (selectedDate) {
+      const formattedDate = format(selectedDate, "yyyy-MM-dd");
+      setSelectedDate(formattedDate);
+      Haptics.selectionAsync();
+    }
+  };
+
+  // Function to show date picker with animation
+  const openDatePicker = () => {
+    setShowDatePicker(true);
+    Animated.spring(datePickerAnim, {
+      toValue: 1,
+      friction: 8,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+  
+
 
   
   const deleteEntry = async () => {
@@ -564,38 +593,108 @@ export default function Journal() {
         </TouchableOpacity>
       </Animated.View>
       
-      {/* Date selector - keep this visible unless editing with keyboard */}
-      {(!keyboardVisible || !isEditing) && (
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          style={styles.dateSelector}
-          contentContainerStyle={styles.dateSelectorContent}
-        >
-          {getPastDays(14).map((date) => (
+       {/* Date selector - keep this visible unless editing with keyboard */}
+       {(!keyboardVisible || !isEditing) && (
+        <View>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            style={styles.dateSelector}
+            contentContainerStyle={styles.dateSelectorContent}
+          >
+            {getPastDays(14).map((date) => (
+              <TouchableOpacity
+                key={date}
+                style={[
+                  styles.dateButton,
+                  { backgroundColor: isDark ? '#1e1e1e' : '#f3f4f6' },
+                  selectedDate === date && { backgroundColor: theme.primary },
+                ]}
+                onPress={() => {
+                  setSelectedDate(date);
+                  Haptics.selectionAsync();
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.dateButtonText,
+                  { color: isDark ? '#d1d5db' : '#4b5563' },
+                  selectedDate === date && { color: '#ffffff' },
+                ]}>
+                  {format(parseISO(date), "MMM d")}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            
+            {/* Date picker button */}
             <TouchableOpacity
-              key={date}
               style={[
                 styles.dateButton,
-                { backgroundColor: isDark ? '#1e1e1e' : '#f3f4f6' },
-                selectedDate === date && { backgroundColor: theme.primary },
+                styles.datePickerButton,
+                { backgroundColor: isDark ? '#1e1e1e' : '#f3f4f6' }
               ]}
-              onPress={() => {
-                setSelectedDate(date);
-                Haptics.selectionAsync();
-              }}
+              onPress={openDatePicker}
               activeOpacity={0.7}
             >
+              <Ionicons 
+                name="calendar-outline" 
+                size={18} 
+                color={theme.primary} 
+              />
               <Text style={[
                 styles.dateButtonText,
-                { color: isDark ? '#d1d5db' : '#4b5563' },
-                selectedDate === date && { color: '#ffffff' },
+                { color: theme.primary, marginLeft: 4 }
               ]}>
-                {format(parseISO(date), "MMM d")}
+                More
               </Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+          </ScrollView>
+          
+          {/* Date Picker */}
+          {showDatePicker && (
+            <Animated.View 
+              style={[
+                styles.datePickerContainer,
+                {
+                  backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+                  opacity: datePickerAnim,
+                  transform: [
+                    { scale: datePickerAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.9, 1]
+                    })},
+                    { translateY: datePickerAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0]
+                    })}
+                  ]
+                }
+              ]}
+            >
+              <View style={styles.datePickerHeader}>
+                <Text style={[styles.datePickerTitle, { color: theme.text }]}>
+                  Select Date
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(false)}
+                  style={styles.closeDatePickerButton}
+                >
+                  <Ionicons name="close" size={24} color={theme.secondaryText} />
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={parseISO(selectedDate)}
+                mode="date"
+                display="spinner"
+                onChange={handleDateChange}
+                maximumDate={new Date()}
+                textColor={theme.text}
+                themeVariant={isDark ? "dark" : "light"}
+                style={styles.datePicker}
+              />
+            </Animated.View>
+          )}
+        </View>
       )}
 
       {/* Entry selector - keep this visible unless editing with keyboard */}
@@ -1187,5 +1286,41 @@ const styles = StyleSheet.create({
   confirmDeleteButtonText: {
     color: '#ffffff',
     fontWeight: '600',
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  datePickerContainer: {
+    position: 'absolute',
+    top: 45,
+    left: 16,
+    right: 16,
+    borderRadius: 16,
+    padding: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  closeDatePickerButton: {
+    padding: 4,
+  },
+  datePicker: {
+    width: '100%',
+    height: 200,
   },
 });
