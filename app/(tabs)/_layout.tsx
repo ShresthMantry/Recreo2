@@ -21,8 +21,8 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     paddingBottom: 0,
     paddingTop: 0,
-    elevation: 8,
-    shadowColor: "#8B5CF6",
+    elevation: 3,
+    shadowColor: "#4CC9F0",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     borderRadius: 22.5, // Half of width/height
     alignSelf: "center",
   },
-  indicator: {
+indicatorStyle: {
     position: "absolute",
     height: 4, // Increased from 3
     width: 30, // Increased from 25
@@ -184,7 +184,10 @@ export default function TabsLayout() {
         
         return {
           headerShown: false,
-          tabBarStyle: styles.tabBar,
+          tabBarStyle: {
+            ...styles.tabBar,
+            shadowColor: isDark ? "#4CC9F0" : theme.primary, // Dynamic shadow color based on theme
+          },
           tabBarActiveTintColor: theme.primary,
           tabBarInactiveTintColor: isDark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)",
           tabBarShowLabel: false,
