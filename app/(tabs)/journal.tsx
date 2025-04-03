@@ -20,7 +20,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext"; // Add theme context
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, addMonths, subMonths, getYear, getMonth, getDate, getDaysInMonth } from "date-fns";
 import { createClient } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -80,6 +80,9 @@ export default function Journal() {
   const contentScrollRef = useRef<ScrollView>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerAnim] = useState(new Animated.Value(0));
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [customDatePickerVisible, setCustomDatePickerVisible] = useState(false);
+  const calendarAnim = useRef(new Animated.Value(0)).current;
 
   const moods = [
     { label: "Great", value: "great", icon: "sunny-outline", color: "#FFD700" },
@@ -278,8 +281,14 @@ export default function Journal() {
 
   // Function to show date picker with animation
   const openDatePicker = () => {
-    setShowDatePicker(true);
-    Animated.spring(datePickerAnim, {
+    openCustomDatePicker();
+  };
+
+  // Function to show custom date picker with animation
+  const openCustomDatePicker = () => {
+    setCustomDatePickerVisible(true);
+    setCalendarDate(parseISO(selectedDate));
+    Animated.spring(calendarAnim, {
       toValue: 1,
       friction: 8,
       tension: 40,
@@ -287,6 +296,80 @@ export default function Journal() {
     }).start();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
+
+  // Function to close custom date picker
+  const closeCustomDatePicker = () => {
+    Animated.timing(calendarAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setCustomDatePickerVisible(false);
+    });
+  };
+
+   // Function to handle month navigation
+   const changeMonth = (direction: 'prev' | 'next') => {
+    setCalendarDate(prevDate => 
+      direction === 'next' ? addMonths(prevDate, 1) : subMonths(prevDate, 1)
+    );
+    Haptics.selectionAsync();
+  };
+
+   // Function to select a date from the calendar
+   const selectCalendarDate = (day: number) => {
+    const newDate = new Date(
+      getYear(calendarDate),
+      getMonth(calendarDate),
+      day
+    );
+    
+    // Don't allow future dates
+    if (newDate > new Date()) return;
+    
+    const formattedDate = format(newDate, "yyyy-MM-dd");
+    setSelectedDate(formattedDate);
+    Haptics.selectionAsync();
+    closeCustomDatePicker();
+  };
+
+  const generateCalendarDays = () => {
+    const year = getYear(calendarDate);
+    const month = getMonth(calendarDate);
+    const daysInMonth = getDaysInMonth(calendarDate);
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    
+    const days = [];
+    
+    // Add empty spaces for days before the 1st of the month
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      days.push(null);
+    }
+    
+    // Add the days of the month
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i);
+    }
+    
+    return days;
+  };
+
+  // Function to check if a date has entries
+  const hasEntriesForDate = (day: number) => {
+    if (!day) return false;
+    
+    const dateToCheck = format(
+      new Date(getYear(calendarDate), getMonth(calendarDate), day),
+      "yyyy-MM-dd"
+    );
+    
+    return entries.some(entry => entry.date === dateToCheck);
+  };
+
+
+
+
+
   
 
 
@@ -343,7 +426,7 @@ export default function Journal() {
 
   const createNewEntry = () => {
     const today = format(new Date(), "yyyy-MM-dd");
-    setSelectedDate(today);
+    // setSelectedDate(today);
     setContent("");
     setMood("neutral");
     setCurrentEntry(null);
@@ -593,8 +676,181 @@ export default function Journal() {
         </TouchableOpacity>
       </Animated.View>
       
-       {/* Date selector - keep this visible unless editing with keyboard */}
-       {(!keyboardVisible || !isEditing) && (
+        {/* Custom Date Picker Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={customDatePickerVisible}
+        onRequestClose={closeCustomDatePicker}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={closeCustomDatePicker}
+        >
+          <Animated.View 
+            style={[
+              styles.calendarContainer,
+              {
+                backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+                shadowColor: isDark ? theme.primary : '#000',
+                opacity: calendarAnim,
+                transform: [
+                  { scale: calendarAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.9, 1]
+                  })},
+                  { translateY: calendarAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0]
+                  })}
+                ]
+              }
+            ]}
+          >
+            <View style={styles.calendarHeader}>
+              <Text style={[styles.calendarTitle, { color: theme.text }]}>
+                Select Date
+              </Text>
+              <TouchableOpacity
+                onPress={closeCustomDatePicker}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color={theme.secondaryText} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.monthSelector}>
+              <TouchableOpacity 
+                onPress={() => changeMonth('prev')}
+                style={styles.monthButton}
+              >
+                <Ionicons name="chevron-back" size={24} color={theme.primary} />
+              </TouchableOpacity>
+              
+              <Text style={[styles.monthTitle, { color: theme.text }]}>
+                {format(calendarDate, "MMMM yyyy")}
+              </Text>
+              
+              <TouchableOpacity 
+                onPress={() => changeMonth('next')}
+                style={styles.monthButton}
+                disabled={
+                  getYear(calendarDate) >= getYear(new Date()) && 
+                  getMonth(calendarDate) >= getMonth(new Date())
+                }
+              >
+                <Ionicons 
+                  name="chevron-forward" 
+                  size={24} 
+                  color={
+                    getYear(calendarDate) >= getYear(new Date()) && 
+                    getMonth(calendarDate) >= getMonth(new Date())
+                      ? theme.secondaryText
+                      : theme.primary
+                  } 
+                />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.weekdaysRow}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+                <Text 
+                  key={index} 
+                  style={[
+                    styles.weekdayText, 
+                    { color: theme.secondaryText }
+                  ]}
+                >
+                  {day}
+                </Text>
+              ))}
+            </View>
+            
+            <View style={styles.calendarGrid}>
+              {generateCalendarDays().map((day, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.calendarDay,
+                    day === getDate(parseISO(selectedDate)) && 
+                    getMonth(calendarDate) === getMonth(parseISO(selectedDate)) && 
+                    getYear(calendarDate) === getYear(parseISO(selectedDate)) && 
+                    { backgroundColor: theme.primary },
+                    !day && { opacity: 0 }
+                  ]}
+                  onPress={() => day && selectCalendarDate(day)}
+                  disabled={!day || (
+                    new Date(getYear(calendarDate), getMonth(calendarDate), day) > new Date()
+                  )}
+                >
+                  <Text 
+                    style={[
+                      styles.calendarDayText,
+                      { 
+                        color: isDark ? '#d1d5db' : '#4b5563',
+                        opacity: (
+                          !day || 
+                          new Date(getYear(calendarDate), getMonth(calendarDate), day) > new Date()
+                        ) ? 0.3 : 1
+                      },
+                      day === getDate(parseISO(selectedDate)) && 
+                      getMonth(calendarDate) === getMonth(parseISO(selectedDate)) && 
+                      getYear(calendarDate) === getYear(parseISO(selectedDate)) && 
+                      { color: '#ffffff', fontWeight: '600' }
+                    ]}
+                  >
+                    {day}
+                  </Text>
+                  
+                  {/* Dot indicator for days with entries */}
+                  {day && hasEntriesForDate(day) && (
+                    <View 
+                      style={[
+                        styles.entryIndicator,
+                        { 
+                          backgroundColor: 
+                            day === getDate(parseISO(selectedDate)) && 
+                            getMonth(calendarDate) === getMonth(parseISO(selectedDate)) && 
+                            getYear(calendarDate) === getYear(parseISO(selectedDate))
+                              ? '#ffffff'
+                              : theme.primary
+                        }
+                      ]} 
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TouchableOpacity
+              style={[
+                styles.todayButton,
+                { backgroundColor: `${theme.primary}15` }
+              ]}
+              onPress={() => {
+                const today = new Date();
+                setCalendarDate(today);
+                // Fix: Use the correct format for today's date and properly select it
+                const formattedToday = format(today, "yyyy-MM-dd");
+                setSelectedDate(formattedToday);
+                // Close the calendar after selecting today
+                closeCustomDatePicker();
+                // Add haptic feedback
+                Haptics.selectionAsync();
+              }}
+            >
+              <Ionicons name="today-outline" size={20} color={theme.primary} />
+              <Text style={[styles.todayButtonText, { color: theme.primary }]}>
+                Today
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </TouchableOpacity>
+      </Modal>
+
+       {/* Replace the old date picker with the button that opens the custom one */}
+      {(!keyboardVisible || !isEditing) && (
         <View>
           <ScrollView 
             horizontal 
@@ -650,50 +906,7 @@ export default function Journal() {
             </TouchableOpacity>
           </ScrollView>
           
-          {/* Date Picker */}
-          {showDatePicker && (
-            <Animated.View 
-              style={[
-                styles.datePickerContainer,
-                {
-                  backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
-                  opacity: datePickerAnim,
-                  transform: [
-                    { scale: datePickerAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.9, 1]
-                    })},
-                    { translateY: datePickerAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [10, 0]
-                    })}
-                  ]
-                }
-              ]}
-            >
-              <View style={styles.datePickerHeader}>
-                <Text style={[styles.datePickerTitle, { color: theme.text }]}>
-                  Select Date
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setShowDatePicker(false)}
-                  style={styles.closeDatePickerButton}
-                >
-                  <Ionicons name="close" size={24} color={theme.secondaryText} />
-                </TouchableOpacity>
-              </View>
-              <DateTimePicker
-                value={parseISO(selectedDate)}
-                mode="date"
-                display="spinner"
-                onChange={handleDateChange}
-                maximumDate={new Date()}
-                textColor={theme.text}
-                themeVariant={isDark ? "dark" : "light"}
-                style={styles.datePicker}
-              />
-            </Animated.View>
-          )}
+          {/* Remove the old date picker code */}
         </View>
       )}
 
@@ -1147,7 +1360,7 @@ const styles = StyleSheet.create({
   },
   successToast: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 90,
     left: 20,
     right: 20,
     zIndex: 100,
@@ -1322,5 +1535,88 @@ const styles = StyleSheet.create({
   datePicker: {
     width: '100%',
     height: 200,
+  },
+  // Add new styles for the custom calendar
+  calendarContainer: {
+    width: '90%',
+    borderRadius: 16,
+    padding: 20,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+    alignSelf: 'center',
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  calendarTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  monthSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  monthButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  monthTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  weekdaysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  weekdayText: {
+    width: 40,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  calendarDay: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    borderRadius: 20,
+    position: 'relative',
+  },
+  calendarDayText: {
+    fontSize: 16,
+    fontWeight: '400',
+  },
+  entryIndicator: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    position: 'absolute',
+    bottom: 6,
+  },
+  todayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  todayButtonText: {
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
