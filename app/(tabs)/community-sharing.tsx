@@ -728,26 +728,32 @@ export default function CommunitySharing() {
       <StatusBar style={isDark ? "light" : "dark"} />
       
       <View style={[styles.header, { borderBottomColor: theme.divider }]}>
-        <Text style={[styles.title, { color: theme.text }]}>Community</Text>
         {viewMode === "comments" ? (
-          <TouchableOpacity
-            onPress={() => {
-              setViewMode("feed");
-              setSelectedPostId(null);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-            style={[styles.backButton, { backgroundColor: theme.surfaceHover }]}
-          >
-            <Ionicons name="arrow-back" size={24} color={theme.primary} />
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              onPress={() => {
+                setViewMode("feed");
+                setSelectedPostId(null);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              style={[styles.backButton, { backgroundColor: theme.surfaceHover }]}
+            >
+              <Ionicons name="arrow-back" size={24} color={theme.primary} />
+            </TouchableOpacity>
+            <Text style={[styles.title, { color: theme.text }]}>Community</Text>
+            <View style={styles.headerRightPlaceholder} />
+          </>
         ) : (
-          <TouchableOpacity
-            onPress={openCreatePostModal}
-            style={[styles.createButton, { backgroundColor: theme.primary }]}
-          >
-            <Ionicons name="add" size={20} color="white" />
-            <Text style={styles.createButtonText}>Post</Text>
-          </TouchableOpacity>
+          <>
+            <Text style={[styles.title, { color: theme.text }]}>Community</Text>
+            <TouchableOpacity
+              onPress={openCreatePostModal}
+              style={[styles.createButton, { backgroundColor: theme.primary }]}
+            >
+              <Ionicons name="add" size={20} color="white" />
+              <Text style={styles.createButtonText}>Post</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
        {/* Create Post Modal */}
@@ -1150,7 +1156,7 @@ export default function CommunitySharing() {
                 <KeyboardAvoidingView 
                   behavior={Platform.OS === "ios" ? "padding" : "height"}
                   style={{ flex: 1 }}
-                  keyboardVerticalOffset={Platform.OS === "ios" ? -50 : 20}
+                  keyboardVerticalOffset={Platform.OS === "ios" ? -50 : 2}
                 >
                   <View style={{ flex: 1 }}>
                     <FlatList
@@ -1254,6 +1260,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerRightPlaceholder: {
+    width: 40, // Approximately the same width as the back button
   },
   // New create post button in header
   createButton: {
@@ -1583,7 +1592,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 5,
     // Remove absolute positioning and adjust padding
-    paddingBottom: Platform.OS === "ios" ? 70 : 16,
+    paddingBottom: Platform.OS === "ios" ? 70 : 86,
     backgroundColor: 'transparent', // This will be overridden by the inline style
   },
   commentInput: {
