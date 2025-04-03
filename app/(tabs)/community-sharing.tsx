@@ -64,6 +64,19 @@ interface Comment {
   created_at: string;
 }
 
+// Add new interfaces for delete confirmation
+interface DeleteConfirmation {
+  visible: boolean;
+  type: "post" | "comment";
+  id: string;
+}
+
+interface SuccessMessage {
+  visible: boolean;
+  message: string;
+}
+
+
 const { width, height } = Dimensions.get('window');
 
 export default function CommunitySharing() {
@@ -90,6 +103,24 @@ export default function CommunitySharing() {
   
   // New state for create post modal
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
+
+  // Add new state for delete confirmation and success message
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmation>({
+    visible: false,
+    type: "post",
+    id: ""
+  });
+  const [successMessage, setSuccessMessage] = useState<SuccessMessage>({
+    visible: false,
+    message: ""
+  });
+  // Animation values for delete confirmation and success message
+  const deleteModalAnim = useRef(new Animated.Value(0)).current;
+  const successModalAnim = useRef(new Animated.Value(0)).current;
+  const successIconAnim = useRef(new Animated.Value(0)).current;
+
+  
+
   
   // Animation values
   const fabAnim = useRef(new Animated.Value(1)).current;
@@ -455,81 +486,192 @@ export default function CommunitySharing() {
     }
   };
 
+  // Replace deletePost function
   const deletePost = async (postId: string) => {
     try {
-      Alert.alert(
-        "Delete Post",
-        "Are you sure you want to delete this post?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: async () => {
-              // Find the post to get the image_url before deleting
-              const postToDelete = posts.find(post => post.id === postId);
-              
-              // Animate the post removal
-              Animated.timing(postAnimations[postId], {
-                toValue: 0,
-                duration: 300,
-                useNativeDriver: true,
-              }).start(() => {
-                // Optimistic update
-                setPosts(prev => prev.filter(post => post.id !== postId));
-                if (selectedPostId === postId) {
-                  setSelectedPostId(null);
-                  setViewMode("feed");
-                }
-              });
-              
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-              // Delete from database
-              const { error } = await supabase
-                .from("community_posts")
-                .delete()
-                .eq("id", postId);
-
-              if (error) throw error;
-              
-              // Delete the image from storage if it exists
-              if (postToDelete?.image_url) {
-                try {
-                  const imagePath = postToDelete.image_url.replace('https://ysavghvmswenmddlnshr.supabase.co/storage/v1/object/public/community-images/', '');
-                  await supabase.storage
-                    .from("community-images")
-                    .remove([imagePath]);
-                } catch (imageDeleteError) {
-                  console.error("Failed to delete image:", imageDeleteError);
-                  // Continue anyway as the post is already deleted
-                }
-              }
-            },
-          },
-        ]
-      );
+      // Show delete confirmation
+      setDeleteConfirmation({
+        visible: true,
+        type: "post",
+        id: postId
+      });
+      
+      // Animate the modal
+      Animated.spring(deleteModalAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true
+      }).start();
+      
+      // Haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       handleError(error);
-      fetchPosts();
     }
   };
 
+  // Replace deleteComment function
   const deleteComment = async (commentId: string) => {
     try {
-      setComments(prev => prev.filter(comment => comment.id !== commentId));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      const { error } = await supabase
-        .from("community_comments")
-        .delete()
-        .eq("id", commentId);
-
-      if (error) throw error;
+      // Show delete confirmation
+      setDeleteConfirmation({
+        visible: true,
+        type: "comment",
+        id: commentId
+      });
+      
+      // Animate the modal
+      Animated.spring(deleteModalAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true
+      }).start();
+      
+      // Haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       handleError(error);
-      if (selectedPostId) fetchComments(selectedPostId);
     }
+  };
+
+  // Add new function to confirm deletion
+  const confirmDelete = async () => {
+    try {
+      // Close the confirmation modal first
+      closeDeleteConfirmation();
+      
+      if (deleteConfirmation.type === "post") {
+        const postId = deleteConfirmation.id;
+        const postToDelete = posts.find(post => post.id === postId);
+        
+        // Animate the post removal
+        Animated.timing(postAnimations[postId], {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          // Optimistic update
+          setPosts(prev => prev.filter(post => post.id !== postId));
+          if (selectedPostId === postId) {
+            setSelectedPostId(null);
+            setViewMode("feed");
+          }
+        });
+        
+        // Delete from database
+        const { error } = await supabase
+          .from("community_posts")
+          .delete()
+          .eq("id", postId);
+
+        if (error) throw error;
+        
+        // Delete the image from storage if it exists
+        if (postToDelete?.image_url) {
+          try {
+            const imagePath = postToDelete.image_url.replace('https://ysavghvmswenmddlnshr.supabase.co/storage/v1/object/public/community-images/', '');
+            await supabase.storage
+              .from("community-images")
+              .remove([imagePath]);
+          } catch (imageDeleteError) {
+            console.error("Failed to delete image:", imageDeleteError);
+          }
+        }
+        
+        // Show success message
+        showSuccessMessage("Post deleted successfully");
+      } else {
+        const commentId = deleteConfirmation.id;
+        
+        // Optimistic update
+        setComments(prev => prev.filter(comment => comment.id !== commentId));
+        
+        // Delete from database
+        const { error } = await supabase
+          .from("community_comments")
+          .delete()
+          .eq("id", commentId);
+
+        if (error) throw error;
+        
+        // Show success message
+        showSuccessMessage("Comment deleted successfully");
+      }
+    } catch (error) {
+      handleError(error);
+      if (deleteConfirmation.type === "post") {
+        fetchPosts();
+      } else if (selectedPostId) {
+        fetchComments(selectedPostId);
+      }
+    }
+  };
+
+  // Add function to close delete confirmation
+  const closeDeleteConfirmation = () => {
+    Animated.timing(deleteModalAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setDeleteConfirmation(prev => ({...prev, visible: false}));
+    });
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Add function to show success message
+  const showSuccessMessage = (message: string) => {
+    setSuccessMessage({
+      visible: true,
+      message
+    });
+    
+    // Animate success modal and icon
+    Animated.sequence([
+      Animated.spring(successModalAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true
+      }),
+      Animated.spring(successIconAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true
+      })
+    ]).start();
+    
+    // Haptic success feedback
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Auto hide after 2 seconds
+    setTimeout(() => {
+      closeSuccessMessage();
+    }, 2000);
+  };
+
+  // Add function to close success message
+  const closeSuccessMessage = () => {
+    Animated.parallel([
+      Animated.timing(successModalAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(successIconAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      setSuccessMessage(prev => ({...prev, visible: false}));
+      // Reset animation values
+      successIconAnim.setValue(0);
+    });
   };
 
   const formatDate = (dateString: string) => {
@@ -700,6 +842,110 @@ export default function CommunitySharing() {
             </Animated.View>
           </BlurView>
         </KeyboardAvoidingView>
+      </Modal>
+
+       {/* Delete Confirmation Modal */}
+       <Modal
+        visible={deleteConfirmation.visible}
+        transparent={true}
+        animationType="none"
+        onRequestClose={closeDeleteConfirmation}
+      >
+        <BlurView intensity={isDark ? 40 : 20} style={styles.blurView} tint={isDark ? "dark" : "light"}>
+          <Animated.View
+            style={[
+              styles.deleteModalContent,
+              {
+                backgroundColor: theme.cardBackground,
+                transform: [
+                  { scale: deleteModalAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1]
+                  }) }
+                ],
+                opacity: deleteModalAnim
+              }
+            ]}
+          >
+            <View style={styles.deleteModalHeader}>
+              <Ionicons 
+                name="warning" 
+                size={40} 
+                color={theme.error} 
+                style={styles.deleteWarningIcon} 
+              />
+              <Text style={[styles.deleteModalTitle, { color: theme.text }]}>
+                Confirm Delete
+              </Text>
+            </View>
+            
+            <Text style={[styles.deleteModalMessage, { color: theme.secondaryText }]}>
+              {deleteConfirmation.type === "post" 
+                ? "Are you sure you want to delete this post? This action cannot be undone."
+                : "Are you sure you want to delete this comment? This action cannot be undone."
+              }
+            </Text>
+            
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity
+                onPress={closeDeleteConfirmation}
+                style={[styles.deleteModalButton, { backgroundColor: theme.surfaceHover }]}
+              >
+                <Text style={[styles.deleteModalButtonText, { color: theme.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                onPress={confirmDelete}
+                style={[styles.deleteModalButton, { backgroundColor: theme.error }]}
+              >
+                <Text style={styles.deleteModalButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </BlurView>
+      </Modal>
+
+       {/* Success Message Modal */}
+       <Modal
+        visible={successMessage.visible}
+        transparent={true}
+        animationType="none"
+      >
+        <View style={styles.successModalContainer}>
+          <Animated.View
+            style={[
+              styles.successModalContent,
+              {
+                backgroundColor: theme.cardBackground,
+                transform: [
+                  { translateY: successModalAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-100, 0]
+                  }) }
+                ],
+                opacity: successModalAnim
+              }
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.successIconContainer,
+                {
+                  backgroundColor: theme.success,
+                  transform: [
+                    { scale: successIconAnim }
+                  ]
+                }
+              ]}
+            >
+              <Ionicons name="checkmark" size={24} color="white" />
+            </Animated.View>
+            
+            <Text style={[styles.successMessage, { color: theme.text }]}>
+              {successMessage.message}
+            </Text>
+          </Animated.View>
+        </View>
       </Modal>
 
       {viewMode === "feed" ? (
@@ -1443,5 +1689,84 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Delete confirmation modal styles
+  deleteModalContent: {
+    width: width * 0.85,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  deleteModalHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  deleteWarningIcon: {
+    marginBottom: 12,
+  },
+  deleteModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  deleteModalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: '45%',
+    alignItems: 'center',
+  },
+  deleteModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+  },
+  
+  // Success message styles
+  successModalContainer: {
+    position: 'absolute',
+    top: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  successModalContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 30,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  successIconContainer: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  successMessage: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
