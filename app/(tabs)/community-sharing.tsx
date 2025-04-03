@@ -79,6 +79,9 @@ export default function CommunitySharing() {
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState<"feed" | "comments">("feed");
   const { theme, isDark } = useTheme();
+
+  const commentsFlatListRef = useRef<FlatList>(null);
+  
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -887,84 +890,102 @@ export default function CommunitySharing() {
           
           
         </>
-      ) : (
-        // Comments View
-        <>
-          {selectedPostId && posts.find((p) => p.id === selectedPostId) && (
-            <View style={[styles.commentsHeader, { backgroundColor: theme.cardBackground }]}>
-              <Text style={[styles.commentsTitle, { color: theme.text }]}>
-                Comments on {posts.find((p) => p.id === selectedPostId)?.username}'s post
-              </Text>
-            </View>
-          )}
-          
-          <FlatList
-            data={comments}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={[styles.commentContainer, { backgroundColor: theme.cardBackground }]}>
-                <View style={styles.commentHeader}>
-                  <View style={styles.userInfo}>
-                    <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
-                      <Text style={styles.avatarText}>
-                        {item.username.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <Text style={[styles.commentUsername, { color: theme.text }]}>
-                      {item.username}
+            ) : (
+              // Comments View
+              <>
+                {selectedPostId && posts.find((p) => p.id === selectedPostId) && (
+                  <View style={[styles.commentsHeader, { backgroundColor: theme.cardBackground }]}>
+                    <Text style={[styles.commentsTitle, { color: theme.text }]}>
+                      Comments on {posts.find((p) => p.id === selectedPostId)?.username}'s post
                     </Text>
                   </View>
-                  <Text style={[styles.commentDate, { color: theme.secondaryText }]}>
-                    {formatDate(item.created_at)}
-                  </Text>
-                  {item.user_email === user.email && (
+                )}
+                
+                <KeyboardAvoidingView 
+                  behavior={Platform.OS === "ios" ? "padding" : "height"}
+                  style={{ flex: 1 }}
+                  keyboardVerticalOffset={Platform.OS === "ios" ? -50 : 20}
+                >
+                  <View style={{ flex: 1 }}>
+                    <FlatList
+                      ref={commentsFlatListRef}
+                      data={comments}
+                      keyExtractor={(item) => item.id}
+                      renderItem={({ item }) => (
+                        <View style={[styles.commentContainer, { backgroundColor: theme.cardBackground }]}>
+                          <View style={styles.commentHeader}>
+                            <View style={styles.userInfo}>
+                              <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
+                                <Text style={styles.avatarText}>
+                                  {item.username.charAt(0).toUpperCase()}
+                                </Text>
+                              </View>
+                              <Text style={[styles.commentUsername, { color: theme.text }]}>
+                                {item.username}
+                              </Text>
+                            </View>
+                            <Text style={[styles.commentDate, { color: theme.secondaryText }]}>
+                              {formatDate(item.created_at)}
+                            </Text>
+                            {item.user_email === user.email && (
+                              <TouchableOpacity
+                                onPress={() => deleteComment(item.id)}
+                                style={[styles.deleteButton, { backgroundColor: theme.surfaceHover }]}
+                              >
+                                <Ionicons name="trash-outline" size={18} color={theme.error} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          <Text style={[styles.commentContent, { color: theme.text }]}>{item.content}</Text>
+                        </View>
+                      )}
+                      ListEmptyComponent={
+                        <Text style={[styles.emptyState, { color: theme.secondaryText }]}>
+                          No comments yet. Be the first to comment!
+                        </Text>
+                      }
+                      // Add padding to the bottom to ensure content isn't hidden behind the input
+                      contentContainerStyle={{ paddingBottom: 100 }}
+                    />
+                  </View>
+                  
+                  <View style={[
+                    styles.commentInputContainer, 
+                    { 
+                      backgroundColor: theme.cardBackground,
+                      borderTopColor: theme.divider,
+                    }
+                  ]}>
+                    <TextInput
+                      style={[styles.commentInput, { 
+                        color: theme.text, 
+                        backgroundColor: theme.inputBackground,
+                        borderColor: theme.inputBorder
+                      }]}
+                      placeholder="Write a comment..."
+                      placeholderTextColor={theme.secondaryText}
+                      value={newCommentContent}
+                      onChangeText={setNewCommentContent}
+                    />
                     <TouchableOpacity
-                      onPress={() => deleteComment(item.id)}
-                      style={[styles.deleteButton, { backgroundColor: theme.surfaceHover }]}
+                      onPress={() => {
+                        addComment();
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        Keyboard.dismiss();
+                      }}
+                      style={[
+                        styles.sendButton,
+                        { backgroundColor: theme.primary },
+                        !newCommentContent.trim() && styles.disabledButton,
+                      ]}
+                      disabled={!newCommentContent.trim()}
                     >
-                      <Ionicons name="trash-outline" size={18} color={theme.error} />
+                      <Ionicons name="send" size={20} color="white" />
                     </TouchableOpacity>
-                  )}
-                </View>
-                <Text style={[styles.commentContent, { color: theme.text }]}>{item.content}</Text>
-              </View>
+                  </View>
+                </KeyboardAvoidingView>
+              </>
             )}
-            ListEmptyComponent={
-              <Text style={[styles.emptyState, { color: theme.secondaryText }]}>
-                No comments yet. Be the first to comment!
-              </Text>
-            }
-          />
-          
-          <View style={[styles.commentInputContainer, { backgroundColor: theme.cardBackground }]}>
-            <TextInput
-              style={[styles.commentInput, { 
-                color: theme.text, 
-                backgroundColor: theme.inputBackground,
-                borderColor: theme.inputBorder
-              }]}
-              placeholder="Write a comment..."
-              placeholderTextColor={theme.secondaryText}
-              value={newCommentContent}
-              onChangeText={setNewCommentContent}
-            />
-            <TouchableOpacity
-              onPress={() => {
-                addComment();
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              }}
-              style={[
-                styles.sendButton,
-                { backgroundColor: theme.primary },
-                !newCommentContent.trim() && styles.disabledButton,
-              ]}
-              disabled={!newCommentContent.trim()}
-            >
-              <Ionicons name="send" size={20} color="white" />
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
 
       
     </SafeAreaView>
@@ -1304,13 +1325,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  commentInputContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    borderTopWidth: 1,
+    alignItems: 'center',
+    // Add shadow to make it stand out
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 5,
+    // Remove absolute positioning and adjust padding
+    paddingBottom: Platform.OS === "ios" ? 70 : 16,
+    backgroundColor: 'transparent', // This will be overridden by the inline style
+  },
   commentInput: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    color: 'white',
-    borderRadius: 8,
+    borderRadius: 20,
     padding: 12,
     marginRight: 8,
+    fontSize: 16,
+    maxHeight: 100, // Limit height for multiline input
   },
   commentPostButton: {
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -1360,12 +1396,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     marginTop: 8,
-  },
-  commentInputContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    borderTopWidth: 1,
-    alignItems: 'center',
   },
   
   sendButton: {
