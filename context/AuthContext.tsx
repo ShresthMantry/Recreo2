@@ -25,6 +25,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Move ADMIN_EMAILS to the top level, before AuthProvider
+const ADMIN_EMAILS = [
+  'prathamgupta2468@gmail.com',
+  'shresthmantry72003@gmail.com'
+];
+
 export const AuthProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
 
@@ -32,12 +38,11 @@ export const AuthProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
     const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        const isAdmin = ADMIN_EMAILS.includes((session.user.email || "").toLowerCase());
         const userData = {
           name: session.user.user_metadata?.name || "",
           email: session.user.email || "",
-          role: (session.user.user_metadata?.role === "admin" || session.user.user_metadata?.role === "user") 
-            ? session.user.user_metadata.role 
-            : "user",
+          role: isAdmin ? "admin" : "user",
           activities: session.user.user_metadata?.activities || []
         };
         setUser(userData);
@@ -76,22 +81,23 @@ export const AuthProvider: React.FC<React.PropsWithChildren<{}>> = ({ children }
       throw new Error("Login failed: User not found.");
     }
 
+    // Check if email is in admin list
+    const isAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
+    
     const userData: User = {
       name: data.user.user_metadata?.name || "",
-      role: (data.user.user_metadata?.role === "admin" || data.user.user_metadata?.role === "user") 
-        ? data.user.user_metadata.role as "admin" | "user"
-        : "user",
+      role: isAdmin ? "admin" : "user", // Set role based on email check
       email: data.user.email || "",
       activities: data.user.user_metadata?.activities || []
     };
     setUser(userData);
     console.log(userData);
+
     return userData;
-    
   };
 
   const register = async (name: string, email: string, password: string) => {
-    const role = email.endsWith("@admin.com") ? "admin" : "user";
+    const role = ADMIN_EMAILS.includes(email.toLowerCase()) ? "admin" : "user";
     
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -165,3 +171,5 @@ export const useAuth = () => {
   }
   return context;
 };
+
+// Add this constant at the top of the file, after the imports

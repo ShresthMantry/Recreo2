@@ -175,7 +175,15 @@ export default function TabsLayout() {
   };
 
   // Only include home, 3 activities, more, settings
-  const visibleTabs = ["index", ...activityTabs.filter(a => allPossibleActivities.includes(a)).slice(0, 3), "more", "settings"];
+  // Update the visibleTabs array to include admin
+  const visibleTabs = [
+    "index", 
+    ...activityTabs.filter(a => allPossibleActivities.includes(a)).slice(0, 3), 
+    "more", 
+    "settings",
+    // Add admin tab if user is admin
+    ...(user?.role === 'admin' ? ['users'] : [])
+  ];
 
   return (
     <Tabs
@@ -392,7 +400,22 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Admin tab is removed */}
+      {/* Move the admin tab before the closing Tabs tag */}
+      {user?.role === 'admin' && (
+        <Tabs.Screen
+          name="users"
+          options={{
+            title: 'Users',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons 
+                name={focused ? "people" : "people-outline"} 
+                size={26} 
+                color={color} 
+              />
+            ),
+          }}
+        />
+      )}
     </Tabs>
   );
 }
