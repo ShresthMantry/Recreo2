@@ -444,7 +444,7 @@ export default function DrawingScreen() {
             opacity: paletteOpacityAnim,
             transform: [{ scale: paletteScaleAnim }],
             left: Math.max(20, Math.min(screenWidth - 380, floatingButtonPosition.x - 160)),
-            top: floatingButtonPosition.y - 70, // Position above the floating button
+            top: floatingButtonPosition.y - 80, // Increased distance from floating button
           }
         ]}
       >
@@ -525,6 +525,7 @@ export default function DrawingScreen() {
                 maximumTrackTintColor={theme.divider}
                 thumbTintColor={theme.primary}
               />
+              <Text style={[styles.sizeText, { color: theme.text }]}>Size: {strokeWidth.toFixed(0)}</Text>
               <View style={styles.sizePreview}>
                 <View style={[
                   styles.brushPreview, 
@@ -552,6 +553,7 @@ export default function DrawingScreen() {
                 maximumTrackTintColor={theme.divider}
                 thumbTintColor={theme.primary}
               />
+              <Text style={[styles.sizeText, { color: theme.text }]}>Size: {eraserWidth.toFixed(0)}</Text>
               <View style={styles.sizePreview}>
                 <View style={[
                   styles.brushPreview, 
@@ -705,6 +707,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginTop: 5,
+    marginBottom: 5,
+    fontWeight: '500',
   },
   slider: {
     width: '100%',
