@@ -134,8 +134,8 @@ export default function TabsLayout() {
     // Trigger haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
-    // Fixed number of tabs: home + 3 activities + more + settings = 6
-    const numTabs = 6;
+    // Calculate number of tabs dynamically based on user role
+    const numTabs = visibleTabs.length; // Use actual number of visible tabs
     const tabWidth = (width - 48) / numTabs; // Account for left/right padding
     const offsetX = index * tabWidth + (tabWidth / 2 - 12.5);
 
@@ -175,7 +175,14 @@ export default function TabsLayout() {
   };
 
   // Only include home, 3 activities, more, settings
-  const visibleTabs = ["index", ...activityTabs.filter(a => allPossibleActivities.includes(a)).slice(0, 3), "more", "settings"];
+  // const visibleTabs = ["index", ...activityTabs.filter(a => allPossibleActivities.includes(a)).slice(0, 3), "more", "settings"];
+  const visibleTabs = [
+    "index", 
+    ...activityTabs.filter(a => allPossibleActivities.includes(a)).slice(0, 3), 
+    "more", 
+    "settings",
+    ...(user?.role === 'admin' ? ['users'] : [])
+  ];
 
   return (
     <Tabs
@@ -372,7 +379,7 @@ export default function TabsLayout() {
             <Ionicons 
               name={focused ? "apps" : "apps-outline"} 
               color={color} 
-              size={26} // Increased from 22 to 26
+              size={26}
             />
           ),
         }}
@@ -386,13 +393,27 @@ export default function TabsLayout() {
             <Ionicons 
               name={focused ? "settings" : "settings-outline"} 
               color={color} 
-              size={26} // Increased from 22 to 26
+              size={26}
             />
           ),
         }}
       />
 
-      {/* Admin tab is removed */}
+      {/* Users tab - only visible for admin */}
+      <Tabs.Screen
+        name="users"
+        options={{
+          title: 'Users',
+          href: user?.role === 'admin' ? undefined : null, // Only include in navigation if admin
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? "people" : "people-outline"} 
+              size={26} 
+              color={color} 
+            />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

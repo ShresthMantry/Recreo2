@@ -1092,7 +1092,7 @@ export default function CommunitySharing() {
                         </Text>
                       </View>
                     </View>
-                    {item.user_email === user.email && (
+                    {(item.user_email === user.email || user.role === 'admin') && (
                       <TouchableOpacity
                         onPress={() => deletePost(item.id)}
                         style={[styles.deleteButton, { backgroundColor: theme.surfaceHover }]}
@@ -1179,7 +1179,7 @@ export default function CommunitySharing() {
                             <Text style={[styles.commentDate, { color: theme.secondaryText }]}>
                               {formatDate(item.created_at)}
                             </Text>
-                            {item.user_email === user.email && (
+                            {(item.user_email === user.email || user.role === 'admin') && (
                               <TouchableOpacity
                                 onPress={() => deleteComment(item.id)}
                                 style={[styles.deleteButton, { backgroundColor: theme.surfaceHover }]}
