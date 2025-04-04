@@ -1,5 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, PanResponder, TouchableOpacity, Text, Dimensions, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { 
+  View, 
+  StyleSheet, 
+  PanResponder, 
+  TouchableOpacity, 
+  Text, 
+  Dimensions, 
+  SafeAreaView, 
+  StatusBar,
+  Animated,
+  Easing,
+  PanResponderGestureState
+} from 'react-native';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three';
@@ -7,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import Slider from '@react-native-community/slider';
 
 // Extend WebGLRenderingContext for Expo
 declare global {
@@ -15,7 +28,7 @@ declare global {
   }
 }
 
-// Extended color palette with more options
+// Color palette options
 const COLORS = [
   '#FFFFFF', '#000000', '#FF0000', '#00FF00', '#0000FF', 
   '#FFFF00', '#FF00FF', '#00FFFF', '#FFA500', '#A52A2A',
@@ -23,36 +36,31 @@ const COLORS = [
   '#000080', '#FF4500', '#DA70D6', '#1E90FF', '#32CD32'
 ];
 
-// Increased eraser size options
-const ERASER_SIZES = [
-  { size: 5, label: 'XS' },
-  { size: 10, label: 'S' },
-  { size: 20, label: 'M' },
-  { size: 30, label: 'L' },
-  { size: 40, label: 'XL' }
-];
-
-// Brush size options
-const BRUSH_SIZES = [
-  { size: 2, label: 'XS' },
-  { size: 5, label: 'S' },
-  { size: 10, label: 'M' },
-  { size: 15, label: 'L' },
-  { size: 20, label: 'XL' }
-];
-
 export default function DrawingScreen() {
   const { theme, isDark } = useTheme();
-  const [color, setColor] = useState('#ffffff');
+  const [color, setColor] = useState(isDark ? '#FFFFFF' : '#000000');
   const [isEraser, setIsEraser] = useState(false);
   const [strokeWidth, setStrokeWidth] = useState(5);
   const [eraserWidth, setEraserWidth] = useState(20);
-  const [showColorPalette, setShowColorPalette] = useState(false);
-  const [showEraserSizes, setShowEraserSizes] = useState(false);
-  const [showBrushSizes, setShowBrushSizes] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [activeTool, setActiveTool] = useState<'brush' | 'eraser' | 'color' | null>(null);
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   const [canvasLayout, setCanvasLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [undoStack, setUndoStack] = useState<THREE.Line[][]>([]);
+  const [redoStack, setRedoStack] = useState<THREE.Line[][]>([]);
+  
+  // Floating button position
+  const [floatingButtonPosition, setFloatingButtonPosition] = useState({
+    x: screenWidth - 80,
+    y: screenHeight - 200,
+  });
+
+  // Animation values
+  const paletteScaleAnim = useRef(new Animated.Value(0)).current;
+  const paletteOpacityAnim = useRef(new Animated.Value(0)).current;
+  const toolbarScaleAnim = useRef(new Animated.Value(0)).current;
+  const toolbarOpacityAnim = useRef(new Animated.Value(0)).current;
+  const buttonRotateAnim = useRef(new Animated.Value(0)).current;
 
   const glRef = useRef<WebGLRenderingContext | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -62,34 +70,23 @@ export default function DrawingScreen() {
   const currentLineRef = useRef<THREE.Line | null>(null);
   const pointsRef = useRef<THREE.Vector3[]>([]);
 
-  // Close all menus when tapping outside
-  useEffect(() => {
-    if (showColorPalette || showEraserSizes || showBrushSizes) {
-      const timer = setTimeout(() => {
-        setShowColorPalette(false);
-        setShowEraserSizes(false);
-        setShowBrushSizes(false);
-      }, 5000); // Auto-close after 5 seconds of inactivity
-      
-      return () => clearTimeout(timer);
-    }
-  }, [showColorPalette, showEraserSizes, showBrushSizes]);
-
+  // Initialize the canvas
   const onGLContextCreate = async (gl: WebGLRenderingContext) => {
     glRef.current = gl;
 
     // Create renderer
     const renderer = new Renderer({ gl });
     renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
-    renderer.setClearColor(isDark ? 0x1a1a1a : 0xf5f5f5); // Use theme-based background
+    // Set canvas background color based on theme
+    renderer.setClearColor(isDark ? 0x1a1a1a : 0xf5f5f5);
     rendererRef.current = renderer;
 
     // Create camera
     const camera = new THREE.OrthographicCamera(
-      -screenWidth / 2,  // left
-      screenWidth / 2,   // right
-      screenHeight / 2,  // top
-      -screenHeight / 2, // bottom
+      -screenWidth / 2,
+      screenWidth / 2,
+      screenHeight / 2,
+      -screenHeight / 2,
       0.1,
       1000
     );
@@ -106,22 +103,35 @@ export default function DrawingScreen() {
     gl.endFrameEXP();
   };
 
+  // Update canvas color when theme changes
+  useEffect(() => {
+    if (rendererRef.current && glRef.current && sceneRef.current && cameraRef.current) {
+      rendererRef.current.setClearColor(isDark ? 0x1a1a1a : 0xf5f5f5);
+      rendererRef.current.render(sceneRef.current, cameraRef.current);
+      glRef.current.endFrameEXP();
+    }
+  }, [isDark]);
+
+  // Pan responder for drawing
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: (e) => {
       if (!glRef.current || !sceneRef.current || !canvasLayout) return;
 
-      // Close any open menus when drawing starts
-      setShowColorPalette(false);
-      setShowEraserSizes(false);
-      setShowBrushSizes(false);
+      // Close any open toolbars when drawing starts
+      if (isPaletteOpen) {
+        togglePalette();
+      }
+      if (activeTool !== null) {
+        hideToolbar();
+      }
 
       const { locationX: x, locationY: y } = e.nativeEvent;
 
       // Convert touch coordinates to Three.js world coordinates
       const worldX = x - (canvasLayout.width / 2);
-      const worldY = (canvasLayout.height / 2) - y; // Flip Y axis
+      const worldY = (canvasLayout.height / 2) - y;
 
       // Create new points array for this line
       pointsRef.current = [new THREE.Vector3(worldX, worldY, 0)];
@@ -164,21 +174,136 @@ export default function DrawingScreen() {
     onPanResponderRelease: () => {
       if (currentLineRef.current) {
         linesRef.current.push(currentLineRef.current);
+        
         // Save state for undo
         setUndoStack(prev => [...prev, [...linesRef.current]]);
+        
+        // Clear redo stack when new drawing is made
+        setRedoStack([]);
+        
         currentLineRef.current = null;
       }
     }
   });
 
+  // Pan responder for floating button
+  const buttonPanResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      // Haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    },
+    onPanResponderMove: (_, gestureState: PanResponderGestureState) => {
+      setFloatingButtonPosition({
+        x: Math.max(20, Math.min(screenWidth - 80, floatingButtonPosition.x + gestureState.dx)),
+        y: Math.max(100, Math.min(screenHeight - 150, floatingButtonPosition.y + gestureState.dy)),
+      });
+    },
+    onPanResponderRelease: () => {
+      // Haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  });
+
+  // Toggle palette open/close - Modified to show horizontal layout
+  const togglePalette = () => {
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    // Close any open toolbar when toggling palette
+    if (activeTool !== null) {
+      hideToolbar();
+    }
+    
+    const newPaletteState = !isPaletteOpen;
+    setIsPaletteOpen(newPaletteState);
+    
+    // Animate palette
+    Animated.parallel([
+      Animated.timing(paletteScaleAnim, {
+        toValue: newPaletteState ? 1 : 0,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.elastic(1),
+      }),
+      Animated.timing(paletteOpacityAnim, {
+        toValue: newPaletteState ? 1 : 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonRotateAnim, {
+        toValue: newPaletteState ? 1 : 0,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.elastic(1),
+      }),
+    ]).start();
+  };
+
+  // Show toolbar for specific tool - Modified to close palette
+  const showToolbar = (tool: 'brush' | 'eraser' | 'color') => {
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    // Close palette when opening toolbar
+    if (isPaletteOpen) {
+      togglePalette();
+    }
+    
+    setActiveTool(tool);
+    
+    // Set eraser state based on tool
+    if (tool === 'eraser') {
+      setIsEraser(true);
+    } else if (tool === 'brush') {
+      setIsEraser(false);
+    }
+    
+    // Animate toolbar
+    Animated.parallel([
+      Animated.timing(toolbarScaleAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.elastic(1),
+      }),
+      Animated.timing(toolbarOpacityAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // Hide toolbar
+  const hideToolbar = () => {
+    Animated.parallel([
+      Animated.timing(toolbarScaleAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(toolbarOpacityAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setActiveTool(null);
+    });
+  };
+
+  // Clear canvas
   const clearCanvas = () => {
     if (!sceneRef.current || !rendererRef.current || !cameraRef.current || !glRef.current) return;
 
     // Haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     // Save current state for undo
     setUndoStack(prev => [...prev, [...linesRef.current]]);
+    setRedoStack([]);
 
     // Remove all lines
     linesRef.current.forEach(line => {
@@ -189,14 +314,23 @@ export default function DrawingScreen() {
     // Render empty scene
     rendererRef.current.render(sceneRef.current, cameraRef.current);
     glRef.current.endFrameEXP();
+    
+    // Close palette
+    if (isPaletteOpen) {
+      togglePalette();
+    }
   };
 
+  // Undo last action
   const undoLastAction = () => {
     if (!sceneRef.current || !rendererRef.current || !cameraRef.current || !glRef.current) return;
-    if (undoStack.length === 0) return;
+    if (undoStack.length <= 1) return;
 
     // Haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Get current state for redo
+    setRedoStack(prev => [...prev, [...linesRef.current]]);
 
     // Get previous state
     const previousState = undoStack[undoStack.length - 2] || [];
@@ -218,44 +352,55 @@ export default function DrawingScreen() {
     glRef.current.endFrameEXP();
   };
 
-  const toggleColorPalette = () => {
+  // Redo last undone action
+  const redoLastAction = () => {
+    if (!sceneRef.current || !rendererRef.current || !cameraRef.current || !glRef.current) return;
+    if (redoStack.length === 0) return;
+
     // Haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    setShowColorPalette(!showColorPalette);
-    setShowEraserSizes(false);
-    setShowBrushSizes(false);
-    setIsEraser(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Get last redo state
+    const redoState = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+
+    // Save current state for undo
+    setUndoStack(prev => [...prev, [...linesRef.current]]);
+
+    // Remove all current lines
+    linesRef.current.forEach(line => {
+      sceneRef.current?.remove(line);
+    });
+
+    // Add back the lines from the redo state
+    linesRef.current = redoState.map(line => {
+      sceneRef.current?.add(line);
+      return line;
+    });
+
+    // Render
+    rendererRef.current.render(sceneRef.current, cameraRef.current);
+    glRef.current.endFrameEXP();
   };
 
-  const toggleEraserSizes = () => {
+  // Toggle eraser mode
+  const toggleEraser = () => {
     // Haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
-    setShowEraserSizes(!showEraserSizes);
-    setShowColorPalette(false);
-    setShowBrushSizes(false);
-    setIsEraser(true);
+    setIsEraser(!isEraser);
+    showToolbar('eraser');
   };
 
-  const toggleBrushSizes = () => {
-    // Haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    setShowBrushSizes(!showBrushSizes);
-    setShowColorPalette(false);
-    setShowEraserSizes(false);
-    setIsEraser(false);
-  };
+  // Button rotation interpolation
+  const buttonRotate = buttonRotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '135deg']
+  });
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-      
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.cardBackground }]}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Drawing Canvas</Text>
-      </View>
       
       {/* Canvas */}
       <View style={styles.canvasContainer}>
@@ -270,248 +415,309 @@ export default function DrawingScreen() {
         />
       </View>
 
-      {/* Color Palette */}
-      {showColorPalette && (
-        <View style={[styles.paletteContainer, { backgroundColor: theme.cardBackground }]}>
-          <Text style={[styles.paletteTitle, { color: theme.text }]}>Select Color</Text>
-          <View style={styles.colorGrid}>
-            {COLORS.map((c) => (
-              <TouchableOpacity
-                key={c}
-                style={[
-                  styles.colorButton, 
-                  { 
-                    backgroundColor: c,
-                    borderColor: color === c ? theme.primary : theme.divider,
-                    borderWidth: color === c ? 3 : 1,
-                  }
-                ]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setColor(c);
-                  setShowColorPalette(false);
-                }}
-              />
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Eraser Sizes */}
-      {showEraserSizes && (
-        <View style={[styles.toolSizesContainer, { backgroundColor: theme.cardBackground }]}>
-          <Text style={[styles.paletteTitle, { color: theme.text }]}>Eraser Size</Text>
-          <View style={styles.sizesRow}>
-            {ERASER_SIZES.map((eraser) => (
-              <TouchableOpacity
-                key={eraser.size}
-                style={[
-                  styles.sizeButton,
-                  { 
-                    borderColor: eraserWidth === eraser.size ? theme.primary : theme.divider,
-                    backgroundColor: theme.elevation1
-                  }
-                ]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setEraserWidth(eraser.size);
-                  setShowEraserSizes(false);
-                }}
-              >
-                <View style={[
-                  styles.sizePreview, 
-                  { 
-                    width: eraser.size, 
-                    height: eraser.size,
-                    backgroundColor: isDark ? '#ffffff' : '#000000',
-                    opacity: 0.7
-                  }
-                ]} />
-                <Text style={[styles.sizeLabel, { color: theme.text }]}>{eraser.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Brush Sizes */}
-      {showBrushSizes && (
-        <View style={[styles.toolSizesContainer, { backgroundColor: theme.cardBackground }]}>
-          <Text style={[styles.paletteTitle, { color: theme.text }]}>Brush Size</Text>
-          <View style={styles.sizesRow}>
-            {BRUSH_SIZES.map((brush) => (
-              <TouchableOpacity
-                key={brush.size}
-                style={[
-                  styles.sizeButton,
-                  { 
-                    borderColor: strokeWidth === brush.size ? theme.primary : theme.divider,
-                    backgroundColor: theme.elevation1
-                  }
-                ]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setStrokeWidth(brush.size);
-                  setShowBrushSizes(false);
-                }}
-              >
-                <View style={[
-                  styles.sizePreview, 
-                  { 
-                    width: brush.size, 
-                    height: brush.size,
-                    backgroundColor: color
-                  }
-                ]} />
-                <Text style={[styles.sizeLabel, { color: theme.text }]}>{brush.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Controls */}
-      <View style={[styles.controls, { 
-        backgroundColor: theme.cardBackground,
-      }]}>
+      {/* Floating Action Button */}
+      <Animated.View 
+        style={[
+          styles.floatingButton,
+          {
+            left: floatingButtonPosition.x,
+            top: floatingButtonPosition.y,
+            transform: [{ rotate: buttonRotate }]
+          }
+        ]}
+        {...buttonPanResponder.panHandlers}
+      >
         <TouchableOpacity
-          style={[
-            styles.controlButton, 
-            !isEraser && showColorPalette && styles.activeControl
-          ]}
-          onPress={toggleColorPalette}
+          onPress={togglePalette}
+          style={[styles.fabButton, { backgroundColor: theme.primary }]}
         >
-          <Ionicons 
-            name="color-palette" 
-            size={24} 
-            color={!isEraser ? theme.primary : theme.secondaryText} 
-          />
-          <Text style={[styles.buttonText, { color: theme.text }]}>Color</Text>
+          <Ionicons name="add" size={32} color="#fff" />
         </TouchableOpacity>
+      </Animated.View>
 
+      {/* Palette - Modified to show horizontally and positioned above the floating button */}
+      <Animated.View 
+        style={[
+          styles.palette,
+          {
+            backgroundColor: theme.cardBackground,
+            opacity: paletteOpacityAnim,
+            transform: [{ scale: paletteScaleAnim }],
+            left: Math.max(20, Math.min(screenWidth - 380, floatingButtonPosition.x - 160)),
+            top: floatingButtonPosition.y - 70, // Position above the floating button
+          }
+        ]}
+      >
         <TouchableOpacity
-          style={[
-            styles.controlButton, 
-            !isEraser && showBrushSizes && styles.activeControl
-          ]}
-          onPress={toggleBrushSizes}
+          style={[styles.paletteItem, !isEraser ? { backgroundColor: `${theme.primary}30` } : {}]}
+          onPress={() => showToolbar('brush')}
         >
-          <Ionicons 
-            name="brush" 
-            size={24} 
-            color={!isEraser && !showColorPalette ? theme.primary : theme.secondaryText} 
-          />
-          <Text style={[styles.buttonText, { color: theme.text }]}>Size</Text>
+          <Ionicons name="brush" size={24} color={!isEraser ? theme.primary : theme.text} />
         </TouchableOpacity>
-
+        
         <TouchableOpacity
-          style={[
-            styles.controlButton, 
-            isEraser && styles.activeControl
-          ]}
-          onPress={toggleEraserSizes}
+          style={[styles.paletteItem, isEraser ? { backgroundColor: `${theme.primary}30` } : {}]}
+          onPress={() => showToolbar('eraser')}
         >
-          <Ionicons 
-            name="pencil-outline" 
-            size={24} 
-            color={isEraser ? theme.primary : theme.secondaryText} 
-          />
-          <Text style={[styles.buttonText, { color: theme.text }]}>Eraser</Text>
+          <Ionicons name="pencil-outline" size={24} color={isEraser ? theme.primary : theme.text} />
         </TouchableOpacity>
-
+        
         <TouchableOpacity
-          style={[
-            styles.controlButton,
-            { opacity: undoStack.length > 1 ? 1 : 0.5 }
-          ]}
+          style={styles.paletteItem}
+          onPress={() => showToolbar('color')}
+        >
+          <View style={[styles.colorPreview, { backgroundColor: color }]} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.paletteItem, { opacity: undoStack.length > 1 ? 1 : 0.5 }]}
           onPress={undoLastAction}
           disabled={undoStack.length <= 1}
         >
-          <Ionicons 
-            name="arrow-undo" 
-            size={24} 
-            color={undoStack.length > 1 ? theme.primary : theme.divider} 
-          />
-          <Text style={[styles.buttonText, { color: undoStack.length > 1 ? theme.text : theme.divider }]}>Undo</Text>
+          <Ionicons name="arrow-undo" size={24} color={undoStack.length > 1 ? theme.text : theme.divider} />
         </TouchableOpacity>
-
+        
         <TouchableOpacity
-          style={[styles.controlButton]}
+          style={[styles.paletteItem, { opacity: redoStack.length > 0 ? 1 : 0.5 }]}
+          onPress={redoLastAction}
+          disabled={redoStack.length === 0}
+        >
+          <Ionicons name="arrow-redo" size={24} color={redoStack.length > 0 ? theme.text : theme.divider} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.paletteItem}
           onPress={clearCanvas}
         >
           <Ionicons name="trash-outline" size={24} color="#ff4444" />
-          <Text style={[styles.buttonText, { color: "#ff4444" }]}>Clear</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
+
+      {/* Tool Settings Toolbar - Modified to prevent overlap */}
+      {activeTool !== null && (
+        <Animated.View 
+          style={[
+            styles.toolbar,
+            {
+              backgroundColor: theme.cardBackground,
+              opacity: toolbarOpacityAnim,
+              transform: [{ scale: toolbarScaleAnim }],
+              left: Math.max(20, Math.min(screenWidth - 320, floatingButtonPosition.x - 150)),
+              top: Math.max(100, floatingButtonPosition.y - 220),
+            }
+          ]}
+        >
+          <TouchableOpacity style={styles.closeToolbar} onPress={hideToolbar}>
+            <Ionicons name="close" size={20} color={theme.text} />
+          </TouchableOpacity>
+          
+          {activeTool === 'brush' && (
+            <>
+              <Text style={[styles.toolbarTitle, { color: theme.text }]}>Brush Size</Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={1}
+                maximumValue={30}
+                step={1}
+                value={strokeWidth}
+                onValueChange={(value) => setStrokeWidth(value)}
+                minimumTrackTintColor={theme.primary}
+                maximumTrackTintColor={theme.divider}
+                thumbTintColor={theme.primary}
+              />
+              <View style={styles.sizePreview}>
+                <View style={[
+                  styles.brushPreview, 
+                  { 
+                    width: strokeWidth, 
+                    height: strokeWidth,
+                    backgroundColor: color 
+                  }
+                ]} />
+              </View>
+            </>
+          )}
+          
+          {activeTool === 'eraser' && (
+            <>
+              <Text style={[styles.toolbarTitle, { color: theme.text }]}>Eraser Size</Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={5}
+                maximumValue={50}
+                step={1}
+                value={eraserWidth}
+                onValueChange={(value) => setEraserWidth(value)}
+                minimumTrackTintColor={theme.primary}
+                maximumTrackTintColor={theme.divider}
+                thumbTintColor={theme.primary}
+              />
+              <View style={styles.sizePreview}>
+                <View style={[
+                  styles.brushPreview, 
+                  { 
+                    width: eraserWidth, 
+                    height: eraserWidth,
+                    backgroundColor: isDark ? '#ffffff' : '#000000',
+                    opacity: 0.3
+                  }
+                ]} />
+              </View>
+            </>
+          )}
+          
+          {activeTool === 'color' && (
+            <>
+              <Text style={[styles.toolbarTitle, { color: theme.text }]}>Select Color</Text>
+              <View style={styles.colorGrid}>
+                {COLORS.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[
+                      styles.colorButton, 
+                      { 
+                        backgroundColor: c,
+                        borderColor: color === c ? theme.primary : theme.divider,
+                        borderWidth: color === c ? 3 : 1,
+                      }
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setColor(c);
+                      hideToolbar();
+                    }}
+                  />
+                ))}
+              </View>
+            </>
+          )}
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingBottom: 0, // Remove extra padding
+    container: {
+      flex: 1,
+    },
+    canvasContainer: {
+      flex: 1,
+    },
+    canvas: {
+      flex: 1,
+    },
+    floatingButton: {
+      position: 'absolute',
+      width: 60,
+      height: 60,
+      zIndex: 10,
+    },
+    fabButton: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 3,
+      },
+      shadowOpacity: 0.27,
+      shadowRadius: 4.65,
+      elevation: 6,
+    },
+    palette: {
+      position: 'absolute',
+      width: 360,
+      height: 60,
+      padding: 5,
+      borderRadius: 30,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 4,
+      },
+      shadowOpacity: 0.3,
+      shadowRadius: 4.65,
+      elevation: 8,
+      zIndex: 9,
+    },
+    paletteItem: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 1,
+      },
+      shadowOpacity: 0.22,
+      shadowRadius: 2.22,
+      elevation: 3,
+    },
+  colorPreview: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: 'white',
   },
-  header: {
-    padding: 16,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  canvasContainer: {
-    flex: 1,
-    position: 'relative',
-    marginBottom: 80, // Add margin to make space for controls
-  },
-  canvas: {
-    flex: 1,
-  },
-  controls: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
+  toolbar: {
     position: 'absolute',
-    bottom: 100, // Position above the tab bar
-    left: 0,
-    right: 0,
+    width: 300,
+    padding: 20,
     borderRadius: 20,
-    margin: 16,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
+    zIndex: 8,
   },
-  paletteContainer: {
+  closeToolbar: {
     position: 'absolute',
-    bottom: 200, // Position above the controls
-    left: 16,
-    right: 16,
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    top: 10,
+    right: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
-  paletteTitle: {
+  toolbarTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 12,
+    marginBottom: 15,
     textAlign: 'center',
+  },
+  sizeText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 5,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sizePreview: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    height: 50,
+  },
+  brushPreview: {
+    borderRadius: 50,
   },
   colorGrid: {
     flexDirection: 'row',
@@ -532,64 +738,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 1.41,
     elevation: 2,
-  },
-  toolSizesContainer: {
-    position: 'absolute',
-    bottom: 200, // Position above the controls
-    left: 16,
-    right: 16,
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  sizesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  sizeButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 2,
-    width: 60,
-    height: 80,
-  },
-  sizePreview: {
-    borderRadius: 50,
-    marginBottom: 8,
-  },
-  sizeLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  eraserButton: {
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    padding: 8,
-    margin: 8,
-  },
-  selectedEraser: {
-    borderColor: '#ff4444',
-    borderWidth: 2,
-  },
-  eraserText: {
-    fontSize: 10,
-    color: '#000',
-  },
-  buttonText: {  // Add this missing style
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: '500',
   },
 });
