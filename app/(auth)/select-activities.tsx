@@ -41,11 +41,11 @@ export default function SelectActivities() {
     }).start();
   }, []);
 
-  const toggleActivity = (activity) => {
-    if (selectedActivities.includes(activity)) {
+  const toggleActivity = (activity: string) => {
+    if (selectedActivities.includes(activity as never)) {
       setSelectedActivities(selectedActivities.filter((item) => item !== activity));
     } else if (selectedActivities.length < 3) {
-      setSelectedActivities([...selectedActivities, activity]);
+      setSelectedActivities([...selectedActivities, activity as never]);
       
       // Small animation when selecting an item
       const newAnimation = new Animated.Value(0);
@@ -117,7 +117,7 @@ export default function SelectActivities() {
 
         <View style={styles.activitiesContainer}>
           {activitiesList.map((activity, index) => {
-            const isSelected = selectedActivities.includes(activity.name);
+            const isSelected = selectedActivities.includes(activity.name as never);
             const delay = index * 100;
             
             return (
@@ -158,7 +158,7 @@ export default function SelectActivities() {
                     }
                   ]}>
                     <Ionicons 
-                      name={activity.icon} 
+                      name={activity.icon as keyof typeof Ionicons.glyphMap}
                       size={28} 
                       color={isSelected ? "white" : blueAccent} 
                     />
