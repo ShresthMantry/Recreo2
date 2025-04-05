@@ -126,7 +126,8 @@ export default function TabsLayout() {
     "books",
     "journal",
     "community-sharing",
-    "games"
+    "games",
+    "yoga"
   ];
 
   // Animation for tab change with haptic feedback
@@ -341,6 +342,10 @@ export default function TabsLayout() {
                   case "games":
                     iconName = "game-controller";
                     outlineName = "game-controller-outline";
+                    break;
+                  case "yoga":
+                    iconName = "fitness";
+                    outlineName = "fitness-outline";
                     break;
                   default:
                     iconName = "help";
