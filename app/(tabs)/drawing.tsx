@@ -11,7 +11,9 @@ import {
   Animated,
   Easing,
   PanResponderGestureState,
-  Alert
+  Alert,
+  Modal,
+  Image
 } from 'react-native';
 import { GLView } from 'expo-gl';
 import * as ExpoGL from 'expo-gl';
@@ -24,6 +26,7 @@ import * as Haptics from 'expo-haptics';
 import Slider from '@react-native-community/slider';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Extend WebGLRenderingContext for Expo
 declare global {
@@ -54,6 +57,17 @@ export default function DrawingScreen() {
   const [redoStack, setRedoStack] = useState<THREE.Line[][]>([]);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [savedImageUri, setSavedImageUri] = useState<string | null>(null);
+  
+  // Animation values for screen entry
+  const screenEntryAnim = useRef(new Animated.Value(0)).current;
+  const canvasScaleAnim = useRef(new Animated.Value(0.9)).current;
+  const canvasOpacityAnim = useRef(new Animated.Value(0)).current;
+  const headerOpacityAnim = useRef(new Animated.Value(0)).current;
+  
+  // Success popup animation
+  const successPopupAnim = useRef(new Animated.Value(0)).current;
   
   // Floating button position
   const [floatingButtonPosition, setFloatingButtonPosition] = useState({
@@ -108,6 +122,52 @@ export default function DrawingScreen() {
     renderer.render(scene, camera);
     gl.endFrameEXP();
   };
+
+  // Animate screen entry when the component is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      // Haptic feedback on screen entry
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      // Reset animations
+      screenEntryAnim.setValue(0);
+      canvasScaleAnim.setValue(0.9);
+      canvasOpacityAnim.setValue(0);
+      headerOpacityAnim.setValue(0);
+      
+      // Start animations
+      Animated.sequence([
+        Animated.timing(screenEntryAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.cubic),
+        }),
+        Animated.parallel([
+          Animated.timing(canvasScaleAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+            easing: Easing.elastic(1.2),
+          }),
+          Animated.timing(canvasOpacityAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(headerOpacityAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+      
+      return () => {
+        // Clean up animations if needed
+      };
+    }, [])
+  );
 
   // Update canvas color when theme changes
   useEffect(() => {
@@ -211,6 +271,37 @@ export default function DrawingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   });
+
+  const showSuccessMessage = (imageUri: string) => {
+    setSavedImageUri(imageUri);
+    setShowSuccessPopup(true);
+    
+    // Animate popup
+    successPopupAnim.setValue(0);
+    Animated.spring(successPopupAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 40
+    }).start();
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      hideSuccessPopup();
+    }, 3000);
+  };
+  
+  // Hide success popup
+  const hideSuccessPopup = () => {
+    Animated.timing(successPopupAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => {
+      setShowSuccessPopup(false);
+      setSavedImageUri(null);
+    });
+  };
 
   // Toggle palette open/close - Modified to show horizontal layout
   const togglePalette = () => {
@@ -468,8 +559,8 @@ export default function DrawingScreen() {
         // Fallback - at least the image is saved to camera roll
       }
       
-      // Show success message
-      Alert.alert("Success", "Drawing saved to your gallery!");
+      // Show success popup instead of alert
+      showSuccessMessage(snapshot.uri);
     } catch (error) {
       console.error('Error saving drawing:', error);
       Alert.alert("Error", "Failed to save drawing. Please try again.");
@@ -482,9 +573,23 @@ export default function DrawingScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       
-      {/* Header with Title and Save Button */}
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Drawing</Text>
+      {/* Header with Title and Save Button - Enhanced with animation */}
+      <Animated.View 
+        style={[
+          styles.header, 
+          { 
+            opacity: headerOpacityAnim,
+            transform: [{ translateY: headerOpacityAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [-20, 0]
+            })}]
+          }
+        ]}
+      >
+        <View style={styles.headerTitleContainer}>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Drawing</Text>
+          <View style={[styles.headerUnderline, { backgroundColor: theme.primary }]} />
+        </View>
         <TouchableOpacity 
           style={[styles.saveButton, { backgroundColor: theme.primary, opacity: isSaving ? 0.7 : 1 }]} 
           onPress={saveDrawing}
@@ -493,10 +598,20 @@ export default function DrawingScreen() {
           <Ionicons name="save-outline" size={22} color="#fff" />
           <Text style={styles.saveButtonText}>{isSaving ? "Saving..." : "Save"}</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
       
-      {/* Canvas */}
-      <View style={styles.canvasContainer}>
+      {/* Canvas - Enhanced with animation */}
+      <Animated.View 
+        style={[
+          styles.canvasContainer,
+          {
+            opacity: canvasOpacityAnim,
+            transform: [
+              { scale: canvasScaleAnim }
+            ]
+          }
+        ]}
+      >
         <GLView
           style={styles.canvas}
           onContextCreate={onGLContextCreate}
@@ -506,16 +621,17 @@ export default function DrawingScreen() {
           }}
           {...panResponder.panHandlers}
         />
-      </View>
+      </Animated.View>
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button - Enhanced with animation */}
       <Animated.View 
         style={[
           styles.floatingButton,
           {
             left: floatingButtonPosition.x,
             top: floatingButtonPosition.y,
-            transform: [{ rotate: buttonRotate }]
+            transform: [{ rotate: buttonRotate }],
+            opacity: screenEntryAnim
           }
         ]}
         {...buttonPanResponder.panHandlers}
@@ -688,6 +804,79 @@ export default function DrawingScreen() {
           )}
         </Animated.View>
       )}
+      {/* Success Popup */}
+      {showSuccessPopup && (
+        <Modal
+          transparent={true}
+          visible={showSuccessPopup}
+          animationType="none"
+          onRequestClose={hideSuccessPopup}
+        >
+          <View style={styles.modalOverlay}>
+            <Animated.View 
+              style={[
+                styles.successPopup,
+                {
+                  backgroundColor: theme.cardBackground,
+                  transform: [
+                    { scale: successPopupAnim },
+                    { translateY: successPopupAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [50, 0]
+                    })}
+                  ],
+                  opacity: successPopupAnim
+                }
+              ]}
+            >
+              <LinearGradient
+                colors={[theme.primary, isDark ? '#2E7D32' : '#4CAF50']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.successHeader}
+              >
+                <Ionicons name="checkmark-circle" size={40} color="#FFFFFF" />
+                <Text style={styles.successTitle}>
+                  Drawing Saved!
+                </Text>
+                <TouchableOpacity 
+                  style={styles.closePopupButton}
+                  onPress={hideSuccessPopup}
+                >
+                  <Ionicons name="close" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </LinearGradient>
+              
+              {savedImageUri && (
+                <View style={[styles.imagePreviewContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                  <Image 
+                    source={{ uri: savedImageUri }} 
+                    style={styles.imagePreview}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.imageOverlay}>
+                    <Ionicons name="image" size={32} color="#FFFFFF" />
+                  </View>
+                </View>
+              )}
+              
+              <Text style={[styles.successMessage, { color: theme.text }]}>
+                Your drawing has been saved to your photo library in the "Recreo Drawings" album.
+              </Text>
+              
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity 
+                  style={[styles.doneButton, { backgroundColor: theme.primary }]}
+                  onPress={hideSuccessPopup}
+                >
+                  <Ionicons name="checkmark" size={22} color="#FFFFFF" style={styles.buttonIcon} />
+                  <Text style={styles.doneButtonText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -703,10 +892,19 @@ const styles = StyleSheet.create({
       paddingHorizontal: 16,
       paddingVertical: 12,
     },
+    headerTitleContainer: {
+      alignItems: 'flex-start',
+    },
     headerTitle: {
       fontSize: 24,
       fontWeight: '700',
       letterSpacing: 0.5,
+    },
+    headerUnderline: {
+      height: 3,
+      width: 40,
+      borderRadius: 2,
+      marginTop: 4,
     },
     saveButton: {
       flexDirection: 'row',
@@ -867,5 +1065,100 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 1.41,
     elevation: 2,
+  },
+  // New styles for success popup
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  successPopup: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 20,
+  },
+  successHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    paddingVertical: 25,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginLeft: 15,
+    flex: 1,
+    color: '#FFFFFF',
+  },
+  closePopupButton: {
+    padding: 5,
+  },
+  successMessage: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginVertical: 20,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  imagePreviewContainer: {
+    width: '100%',
+    height: 220,
+    position: 'relative',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  imagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  doneButton: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  doneButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
