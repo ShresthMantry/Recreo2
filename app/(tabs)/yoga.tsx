@@ -754,9 +754,10 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   playerContainer: {
-    width: "90%",
+    width: "100%",
     borderRadius: 12,
     overflow: "hidden",
+    backgroundColor: "#000",
   },
   playerHeader: {
     flexDirection: "row",
@@ -767,7 +768,7 @@ const styles = StyleSheet.create({
   },
   playerTitle: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "600",
     flex: 1,
   },
