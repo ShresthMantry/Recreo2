@@ -11,6 +11,8 @@ import {
   TextInput,
   Dimensions,
   Alert,
+  Modal,
+  GestureResponderEvent,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,7 +22,7 @@ import { useAuth } from "../../context/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import * as Haptics from 'expo-haptics';
 // Create Supabase client
 const supabaseUrl = 'https://ysavghvmswenmddlnshr.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzYXZnaHZtc3dlbm1kZGxuc2hyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Mjk5NjgzMiwiZXhwIjoyMDU4NTcyODMyfQ.l8m6QdNt0aedvVnsw7Me28mSXoIA2DbWrEpla751yRg';
@@ -57,12 +59,26 @@ export default function YogaScreen() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedVideo, setSelectedVideo] = useState<YogaVideo | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [categories, setCategories] = useState<string[]>(["All", "Beginner", "Intermediate", "Advanced", "Meditation", "Stretching", "Power Yoga"]);
+  const [categories, setCategories] = useState<string[]>([
+    "All", 
+    "Weight Loss & Fat Burn", 
+    "Strength & Muscle Tone", 
+    "Flexibility & Mobility", 
+    "Relaxation & Stress Relief", 
+    "Energy & Mental Focus", 
+    "Healing & Recovery", 
+    "Meditation"
+  ]);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [newVideoUrl, setNewVideoUrl] = useState<string>("");
   const [newVideoTitle, setNewVideoTitle] = useState<string>("");
-  const [newVideoCategory, setNewVideoCategory] = useState<string>("Beginner");
+  const [newVideoCategory, setNewVideoCategory] = useState<string>("Weight Loss & Fat Burn");
+  // Add state for modal visibility
+  const [showAddVideoModal, setShowAddVideoModal] = useState<boolean>(false);
+  // Add state for delete confirmation modal
+  const [deleteModalVisible, setDeleteModalVisible] = useState<boolean>(false);
+  const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
 
   // Refs
   const playerRef = useRef(null);
@@ -241,6 +257,47 @@ export default function YogaScreen() {
   );
 
   // Render video card
+  // Add function to handle video deletion
+  const handleDeleteVideo = (videoId: string, event: GestureResponderEvent) => {
+    // Stop the event from bubbling up to the parent (which would open the video)
+    event.stopPropagation();
+    setVideoToDelete(videoId);
+    setDeleteModalVisible(true);
+    // Add haptic feedback if available
+    if (Haptics) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  // Add function to confirm video deletion
+  const confirmDeleteVideo = async () => {
+    if (!videoToDelete) return;
+    
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('yoga_videos')
+        .delete()
+        .eq('id', videoToDelete);
+
+      if (error) throw error;
+      
+      // Update local state
+      setVideos(videos.filter(video => video.id !== videoToDelete));
+      setFilteredVideos(filteredVideos.filter(video => video.id !== videoToDelete));
+      
+      Alert.alert('Success', 'Video deleted successfully');
+    } catch (error) {
+      console.error('Error deleting video:', error);
+      Alert.alert('Error', 'Failed to delete video');
+    } finally {
+      setIsLoading(false);
+      setDeleteModalVisible(false);
+      setVideoToDelete(null);
+    }
+  };
+
+  // Update the renderVideoCard function to include a delete button for admins
   const renderVideoCard = ({ item }: { item: YogaVideo }) => (
     <TouchableOpacity
       style={[styles.videoCard, { backgroundColor: theme.cardBackground }]}
@@ -251,6 +308,14 @@ export default function YogaScreen() {
         style={styles.thumbnail}
         resizeMode="cover"
       />
+      {isAdmin && (
+        <TouchableOpacity
+          style={styles.deleteVideoButton}
+          onPress={(event) => handleDeleteVideo(item.id, event)}
+        >
+          <Ionicons name="trash-outline" size={18} color="#fff" />
+        </TouchableOpacity>
+      )}
       <View style={styles.videoInfo}>
         <Text style={[styles.videoTitle, { color: theme.text }]} numberOfLines={2}>
           {item.title}
@@ -264,6 +329,17 @@ export default function YogaScreen() {
     </TouchableOpacity>
   );
 
+  // Add function to toggle modal
+  const toggleAddVideoModal = () => {
+    setShowAddVideoModal(!showAddVideoModal);
+    // Reset form fields when closing
+    if (showAddVideoModal) {
+      setNewVideoUrl("");
+      setNewVideoTitle("");
+      setNewVideoCategory("Beginner");
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar style={isDark ? "light" : "dark"} />
@@ -276,21 +352,33 @@ export default function YogaScreen() {
         </Text>
       </View>
 
-      {/* Search Bar */}
-      <View style={[styles.searchContainer, { backgroundColor: theme.inputBackground, borderColor: theme.inputBorder }]}>
-        <Ionicons name="search" size={20} color={theme.secondaryText} />
-        <TextInput
-          style={[styles.searchInput, { color: theme.text }]}
-          placeholder="Search yoga videos..."
-          placeholderTextColor={theme.secondaryText}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery ? (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color={theme.secondaryText} />
+      {/* Search Bar with Add Button for Admin */}
+      <View style={styles.searchRow}>
+        <View style={[styles.searchContainer, { backgroundColor: theme.inputBackground, borderColor: theme.inputBorder, flex: 1 }]}>
+          <Ionicons name="search" size={20} color={theme.secondaryText} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.text }]}
+            placeholder="Search yoga videos..."
+            placeholderTextColor={theme.secondaryText}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color={theme.secondaryText} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        
+        {/* Add Button for Admin */}
+        {isAdmin && (
+          <TouchableOpacity 
+            style={[styles.addButton, { backgroundColor: theme.primary }]} 
+            onPress={toggleAddVideoModal}
+          >
+            <Ionicons name="add" size={24} color="#fff" />
           </TouchableOpacity>
-        ) : null}
+        )}
       </View>
 
       {/* Categories */}
@@ -305,63 +393,6 @@ export default function YogaScreen() {
         />
       </View>
 
-      {/* Admin Panel */}
-      {isAdmin && (
-        <View style={[styles.adminPanel, { backgroundColor: theme.cardBackground, borderColor: theme.divider }]}>
-          <Text style={[styles.adminTitle, { color: theme.text }]}>Add New Yoga Video</Text>
-          <TextInput
-            style={[styles.adminInput, { backgroundColor: theme.inputBackground, borderColor: theme.inputBorder, color: theme.text }]}
-            placeholder="Video Title"
-            placeholderTextColor={theme.secondaryText}
-            value={newVideoTitle}
-            onChangeText={setNewVideoTitle}
-          />
-          <TextInput
-            style={[styles.adminInput, { backgroundColor: theme.inputBackground, borderColor: theme.inputBorder, color: theme.text }]}
-            placeholder="YouTube URL"
-            placeholderTextColor={theme.secondaryText}
-            value={newVideoUrl}
-            onChangeText={setNewVideoUrl}
-          />
-          <View style={styles.categorySelector}>
-            <Text style={[styles.categoryLabel, { color: theme.text }]}>Category:</Text>
-            <FlatList
-              data={categories.filter(cat => cat !== 'All')}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.adminCategoryPill,
-                    {
-                      backgroundColor: newVideoCategory === item ? theme.primary : theme.cardBackground,
-                      borderColor: theme.divider,
-                    },
-                  ]}
-                  onPress={() => setNewVideoCategory(item)}
-                >
-                  <Text
-                    style={[
-                      styles.categoryText,
-                      { color: newVideoCategory === item ? '#fff' : theme.text },
-                    ]}
-                  >
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              keyExtractor={(item) => item}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-            />
-          </View>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: theme.primary }]}
-            onPress={handleAddVideo}
-          >
-            <Text style={styles.addButtonText}>Add Video</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Video List */}
       {isLoading ? (
         <View style={styles.loaderContainer}>
@@ -374,7 +405,7 @@ export default function YogaScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.videoList}
           showsVerticalScrollIndicator={false}
-          numColumns={2}
+          numColumns={1} // Changed from 2 to 1 to show only one card per row
         />
       ) : (
         <View style={styles.emptyContainer}>
@@ -383,9 +414,81 @@ export default function YogaScreen() {
             {searchQuery
               ? "No yoga videos match your search"
               : isAdmin
-              ? "Add your first yoga video above"
+              ? "Add your first yoga video using the + button"
               : "No yoga videos available yet"}
           </Text>
+        </View>
+      )}
+
+      {/* Add Video Modal */}
+      {showAddVideoModal && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Add New Yoga Video</Text>
+              <TouchableOpacity onPress={toggleAddVideoModal}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <TextInput
+              style={[styles.adminInput, { backgroundColor: theme.inputBackground, borderColor: theme.inputBorder, color: theme.text }]}
+              placeholder="Video Title"
+              placeholderTextColor={theme.secondaryText}
+              value={newVideoTitle}
+              onChangeText={setNewVideoTitle}
+            />
+            
+            <TextInput
+              style={[styles.adminInput, { backgroundColor: theme.inputBackground, borderColor: theme.inputBorder, color: theme.text }]}
+              placeholder="YouTube URL"
+              placeholderTextColor={theme.secondaryText}
+              value={newVideoUrl}
+              onChangeText={setNewVideoUrl}
+            />
+            
+            <View style={styles.categorySelector}>
+              <Text style={[styles.categoryLabel, { color: theme.text }]}>Category:</Text>
+              <FlatList
+                data={categories.filter(cat => cat !== 'All')}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.adminCategoryPill,
+                      {
+                        backgroundColor: newVideoCategory === item ? theme.primary : theme.cardBackground,
+                        borderColor: theme.divider,
+                      },
+                    ]}
+                    onPress={() => setNewVideoCategory(item)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryText,
+                        { color: newVideoCategory === item ? '#fff' : theme.text },
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                keyExtractor={(item) => item}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+              />
+            </View>
+            
+            <TouchableOpacity
+              style={[styles.submitButton, { backgroundColor: theme.primary }]}
+              onPress={() => {
+                handleAddVideo();
+                if (!newVideoUrl || !newVideoTitle || !newVideoCategory) return;
+                toggleAddVideoModal();
+              }}
+            >
+              <Text style={styles.submitButtonText}>Add Video</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -416,6 +519,61 @@ export default function YogaScreen() {
           </View>
         </View>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={deleteModalVisible}
+        onRequestClose={() => setDeleteModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setDeleteModalVisible(false)}
+        >
+          <View style={[
+            styles.deleteModal,
+            { 
+              backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+              shadowColor: isDark ? theme.primary : '#000',
+            }
+          ]}>
+            <View style={styles.deleteModalHeader}>
+              <Ionicons name="warning-outline" size={40} color="#ef4444" />
+              <Text style={[styles.deleteModalTitle, { color: theme.text }]}>
+                Delete Yoga Video
+              </Text>
+            </View>
+            
+            <Text style={[styles.deleteModalMessage, { color: theme.secondaryText }]}>
+              Are you sure you want to delete this video? This action cannot be undone.
+            </Text>
+            
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.cancelDeleteButton, { backgroundColor: isDark ? '#2d2d2d' : '#f3f4f6' }]}
+                onPress={() => {
+                  setDeleteModalVisible(false);
+                  setVideoToDelete(null);
+                  if (Haptics) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                }}
+              >
+                <Text style={[styles.cancelDeleteButtonText, { color: theme.secondaryText }]}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.confirmDeleteButton]}
+                onPress={confirmDeleteVideo}
+              >
+                <Text style={styles.confirmDeleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -437,20 +595,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 5,
   },
+  // New style for search row with add button
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 15,
+  },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginHorizontal: 20,
     paddingHorizontal: 15,
     height: 45,
     borderRadius: 22.5,
     borderWidth: 1,
-    marginBottom: 15,
   },
   searchInput: {
     flex: 1,
     marginLeft: 10,
     fontSize: 16,
+  },
+  // Add button next to search bar
+  addButton: {
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
   },
   categoriesContainer: {
     marginBottom: 15,
@@ -469,13 +641,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
+  // Modal styles
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    width: '90%',
+    borderRadius: 12,
+    padding: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  submitButton: {
+    height: 45,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Existing styles
   videoList: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 15, // Increased from 10 to 15 for better margin
     paddingBottom: 100, // Extra padding for bottom tab bar
   },
   videoCard: {
     flex: 1,
-    margin: 8,
+    margin: 10, // Increased from 8 to 10
     borderRadius: 12,
     overflow: "hidden",
     elevation: 3,
@@ -486,17 +703,17 @@ const styles = StyleSheet.create({
   },
   thumbnail: {
     width: "100%",
-    height: 120,
+    height: 180, // Increased from 120 to 180 for a larger thumbnail
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
   },
   videoInfo: {
-    padding: 10,
+    padding: 15, // Increased from 10 to 15
   },
   videoTitle: {
-    fontSize: 14,
+    fontSize: 16, // Increased from 14 to 16
     fontWeight: "600",
-    marginBottom: 5,
+    marginBottom: 8, // Increased from 5 to 8
   },
   videoMeta: {
     flexDirection: "row",
@@ -587,15 +804,71 @@ const styles = StyleSheet.create({
     marginTop: 5,
     borderWidth: 1,
   },
-  addButton: {
+  // Add styles for delete button on video card
+  deleteVideoButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  
+  // Add styles for delete confirmation modal
+  deleteModal: {
+    width: '85%',
+    borderRadius: 12,
+    padding: 20,
+    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  deleteModalHeader: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  deleteModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 10,
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  deleteModalButton: {
+    flex: 1,
     height: 45,
     borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 5,
   },
-  addButtonText: {
-    color: "#fff",
+  cancelDeleteButton: {
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  confirmDeleteButton: {
+    backgroundColor: '#ef4444',
+  },
+  cancelDeleteButtonText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '500',
   },
+  confirmDeleteButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // ... existing styles ...
 });
