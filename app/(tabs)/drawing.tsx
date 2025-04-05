@@ -178,79 +178,79 @@ export default function DrawingScreen() {
     }
   }, [isDark]);
 
-  // Pan responder for drawing
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (e) => {
-      if (!glRef.current || !sceneRef.current || !canvasLayout) return;
+ // Pan responder for drawing
+const panResponder = PanResponder.create({
+  onStartShouldSetPanResponder: () => true,
+  onMoveShouldSetPanResponder: () => true,
+  onPanResponderGrant: (e) => {
+    if (!glRef.current || !sceneRef.current || !canvasLayout) return;
 
-      // Close any open toolbars when drawing starts
-      if (isPaletteOpen) {
-        togglePalette();
-      }
-      if (activeTool !== null) {
-        hideToolbar();
-      }
-
-      const { locationX: x, locationY: y } = e.nativeEvent;
-
-      // Convert touch coordinates to Three.js world coordinates
-      const worldX = x - (canvasLayout.width / 2);
-      const worldY = (canvasLayout.height / 2) - y;
-
-      // Create new points array for this line
-      pointsRef.current = [new THREE.Vector3(worldX, worldY, 0)];
-
-      // Create geometry
-      const geometry = new THREE.BufferGeometry().setFromPoints(pointsRef.current);
-
-      // Create material with rounded caps and joins
-      const material = new THREE.LineBasicMaterial({
-        color: new THREE.Color(isEraser ? (isDark ? '#1a1a1a' : '#f5f5f5') : color),
-        linewidth: isEraser ? eraserWidth : strokeWidth,
-        linecap: 'round',
-        linejoin: 'round'
-      });
-
-      // Create line
-      currentLineRef.current = new THREE.Line(geometry, material);
-      sceneRef.current.add(currentLineRef.current);
-    },
-    onPanResponderMove: (e) => {
-      if (!glRef.current || !sceneRef.current || !currentLineRef.current || !canvasLayout) return;
-
-      const { locationX: x, locationY: y } = e.nativeEvent;
-
-      // Convert touch coordinates to Three.js world coordinates
-      const worldX = x - (canvasLayout.width / 2);
-      const worldY = (canvasLayout.height / 2) - y; // Flip Y axis
-
-      // Add new point
-      pointsRef.current.push(new THREE.Vector3(worldX, worldY, 0));
-
-      // Update geometry
-      currentLineRef.current.geometry.setFromPoints(pointsRef.current);
-      currentLineRef.current.geometry.attributes.position.needsUpdate = true;
-
-      // Render
-      rendererRef.current?.render(sceneRef.current, cameraRef.current!);
-      glRef.current.endFrameEXP();
-    },
-    onPanResponderRelease: () => {
-      if (currentLineRef.current) {
-        linesRef.current.push(currentLineRef.current);
-        
-        // Save state for undo
-        setUndoStack(prev => [...prev, [...linesRef.current]]);
-        
-        // Clear redo stack when new drawing is made
-        setRedoStack([]);
-        
-        currentLineRef.current = null;
-      }
+    // Close any open toolbars when drawing starts
+    if (isPaletteOpen) {
+      togglePalette();
     }
-  });
+    if (activeTool !== null) {
+      hideToolbar();
+    }
+
+    const { locationX: x, locationY: y } = e.nativeEvent;
+
+    // Convert touch coordinates to Three.js world coordinates
+    const worldX = x - (canvasLayout.width / 2);
+    const worldY = (canvasLayout.height / 2) - y;
+
+    // Create new points array for this line
+    pointsRef.current = [new THREE.Vector3(worldX, worldY, 0)];
+
+    // Create geometry
+    const geometry = new THREE.BufferGeometry().setFromPoints(pointsRef.current);
+
+    // Create material with rounded caps and joins
+    const material = new THREE.LineBasicMaterial({
+      color: new THREE.Color(isEraser ? (isDark ? '#1a1a1a' : '#f5f5f5') : color),
+      linewidth: isEraser ? eraserWidth : strokeWidth,
+      linecap: 'round',
+      linejoin: 'round'
+    });
+
+    // Create line
+    currentLineRef.current = new THREE.Line(geometry, material);
+    sceneRef.current.add(currentLineRef.current);
+  },
+  onPanResponderMove: (e) => {
+    if (!glRef.current || !sceneRef.current || !currentLineRef.current || !canvasLayout) return;
+
+    const { locationX: x, locationY: y } = e.nativeEvent;
+
+    // Convert touch coordinates to Three.js world coordinates
+    const worldX = x - (canvasLayout.width / 2);
+    const worldY = (canvasLayout.height / 2) - y; // Flip Y axis
+
+    // Add new point
+    pointsRef.current.push(new THREE.Vector3(worldX, worldY, 0));
+
+    // Update geometry
+    currentLineRef.current.geometry.setFromPoints(pointsRef.current);
+    currentLineRef.current.geometry.attributes.position.needsUpdate = true;
+
+    // Render
+    rendererRef.current?.render(sceneRef.current, cameraRef.current!);
+    glRef.current.endFrameEXP();
+  },
+  onPanResponderRelease: () => {
+    if (currentLineRef.current) {
+      linesRef.current.push(currentLineRef.current);
+      
+      // Save state for undo
+      setUndoStack(prev => [...prev, [...linesRef.current]]);
+      
+      // Clear redo stack when new drawing is made
+      setRedoStack([]);
+      
+      currentLineRef.current = null;
+    }
+  }
+});
 
   // Pan responder for floating button
   const buttonPanResponder = PanResponder.create({
