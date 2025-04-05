@@ -13,6 +13,7 @@ export const ACTIVITIES = {
   JOURNAL: 'journal',
   COMMUNITY: 'community',
   BOOKS: 'books',
+  YOGA: 'yoga',
 } as const;
 
 export type Activity = typeof ACTIVITIES[keyof typeof ACTIVITIES];
@@ -24,4 +25,5 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   [ACTIVITIES.JOURNAL]: 'Journal',
   [ACTIVITIES.COMMUNITY]: 'Community',
   [ACTIVITIES.BOOKS]: 'Books',
+  [ACTIVITIES.YOGA]: 'Yoga',
 };
