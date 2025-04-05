@@ -27,6 +27,7 @@ const allActivities = [
   { name: "Journal", icon: "journal" },
   { name: "Community-Sharing", icon: "people" },
   { name: "Games", icon: "game-controller" },
+  { name: "Yoga", icon: "yoga"}
 ];
 
 export default function More() {
@@ -95,8 +96,8 @@ export default function More() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     const route = `/(tabs)/${activity.name.toLowerCase()}`;
-    if (["/(tabs)/music", "/(tabs)/drawing", "/(tabs)/books", "/(tabs)/journal", "/(tabs)/community-sharing", "/(tabs)/games"].includes(route)) {
-      router.push(route as "/(tabs)/music" | "/(tabs)/drawing" | "/(tabs)/books" | "/(tabs)/journal" | "/(tabs)/community-sharing" | "/(tabs)/games");
+    if (["/(tabs)/music", "/(tabs)/drawing", "/(tabs)/books", "/(tabs)/journal", "/(tabs)/community-sharing", "/(tabs)/games", "/(tabs)/yoga"].includes(route)) {
+      router.push(route as "/(tabs)/music" | "/(tabs)/drawing" | "/(tabs)/books" | "/(tabs)/journal" | "/(tabs)/community-sharing" | "/(tabs)/games" | "/(tabs)/yoga");
     } else {
       console.error("Invalid route:", route);
     }
@@ -110,6 +111,7 @@ export default function More() {
       case 'journal': return ['#4CAF50', '#2E7D32'];
       case 'community-sharing': return ['#2196F3', '#1976D2'];
       case 'games': return ['#FF9800', '#F57C00'];
+      case 'yoga': return ['#8E24AA', '#6A1B9A']; // Added gradient for yoga
       default: return ['#607D8B', '#455A64'];
     }
   };
