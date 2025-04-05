@@ -10,9 +10,11 @@ import {
   StatusBar,
   Animated,
   Easing,
-  PanResponderGestureState
+  PanResponderGestureState,
+  Alert
 } from 'react-native';
 import { GLView } from 'expo-gl';
+import * as ExpoGL from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +22,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Slider from '@react-native-community/slider';
+import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';
 
 // Extend WebGLRenderingContext for Expo
 declare global {
@@ -48,6 +52,8 @@ export default function DrawingScreen() {
   const [canvasLayout, setCanvasLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [undoStack, setUndoStack] = useState<THREE.Line[][]>([]);
   const [redoStack, setRedoStack] = useState<THREE.Line[][]>([]);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Floating button position
   const [floatingButtonPosition, setFloatingButtonPosition] = useState({
@@ -398,9 +404,96 @@ export default function DrawingScreen() {
     outputRange: ['0deg', '135deg']
   });
 
+  // Request media library permissions
+  useEffect(() => {
+    (async () => {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
+
+  // Save drawing to media library
+  const saveDrawing = async () => {
+    if (!hasPermission) {
+      Alert.alert(
+        "Permission Required",
+        "Please grant media library permissions to save your drawing.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Settings", 
+            onPress: async () => {
+              const { status } = await MediaLibrary.requestPermissionsAsync();
+              setHasPermission(status === 'granted');
+            }
+          }
+        ]
+      );
+      return;
+    }
+
+    if (!glRef.current || !rendererRef.current || !sceneRef.current || !cameraRef.current) {
+      Alert.alert("Error", "Cannot save drawing at this time.");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      
+      // Haptic feedback
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Render the scene to make sure it's up to date
+      rendererRef.current.render(sceneRef.current, cameraRef.current);
+      
+      // Take a snapshot of the GL context
+      const snapshot = await GLView.takeSnapshotAsync(glRef.current as ExpoGL.ExpoWebGLRenderingContext, {
+        format: 'jpeg',
+        compress: 0.9
+      });
+      
+      // Save directly to media library
+      const asset = await MediaLibrary.createAssetAsync(snapshot.uri);
+      
+      // Create album if it doesn't exist
+      try {
+        const album = await MediaLibrary.getAlbumAsync('Recreo Drawings');
+        if (album === null) {
+          await MediaLibrary.createAlbumAsync('Recreo Drawings', asset, false);
+        } else {
+          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+        }
+      } catch (albumError) {
+        console.log('Album creation fallback:', albumError);
+        // Fallback - at least the image is saved to camera roll
+      }
+      
+      // Show success message
+      Alert.alert("Success", "Drawing saved to your gallery!");
+    } catch (error) {
+      console.error('Error saving drawing:', error);
+      Alert.alert("Error", "Failed to save drawing. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+      
+      {/* Header with Title and Save Button */}
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Drawing</Text>
+        <TouchableOpacity 
+          style={[styles.saveButton, { backgroundColor: theme.primary, opacity: isSaving ? 0.7 : 1 }]} 
+          onPress={saveDrawing}
+          disabled={isSaving}
+        >
+          <Ionicons name="save-outline" size={22} color="#fff" />
+          <Text style={styles.saveButtonText}>{isSaving ? "Saving..." : "Save"}</Text>
+        </TouchableOpacity>
+      </View>
       
       {/* Canvas */}
       <View style={styles.canvasContainer}>
@@ -602,6 +695,38 @@ export default function DrawingScreen() {
 const styles = StyleSheet.create({
     container: {
       flex: 1,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    headerTitle: {
+      fontSize: 24,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+    },
+    saveButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
+    },
+    saveButtonText: {
+      color: '#fff',
+      fontWeight: '600',
+      marginLeft: 6,
     },
     canvasContainer: {
       flex: 1,
