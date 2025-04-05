@@ -19,6 +19,7 @@ import { useRouter } from "expo-router";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from "expo-secure-store";
+import Loader from "../../components/Loader";
 
 export default function Register() {
   const [name, setName] = useState("");
@@ -28,6 +29,7 @@ export default function Register() {
   const [error, setError] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Add loading state
   const { register } = useAuth();
   const router = useRouter();
   const { theme } = useTheme();
@@ -119,10 +121,13 @@ export default function Register() {
     
     try {
       setError("");
+      setIsLoading(true); // Show loader
       await register(name, email, password);
       router.push("/(auth)/login");
     } catch (err) {
       setError("Registration failed. Email may already be in use.");
+    } finally {
+      setIsLoading(false); // Hide loader
     }
   };
 
@@ -145,6 +150,14 @@ export default function Register() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <StatusBar barStyle={theme.text === '#FFFFFF' ? "light-content" : "dark-content"} />
+        
+        {/* Add the loader component */}
+        <Loader 
+          visible={isLoading} 
+          text="Creating your account..." 
+          color={theme.primary}
+        />
+        
         <KeyboardAvoidingView 
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.keyboardAvoidingView}

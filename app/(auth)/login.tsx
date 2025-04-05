@@ -20,6 +20,7 @@ import { useRouter } from "expo-router";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Loader from "../../components/Loader";
 
 const { width } = Dimensions.get('window');
 
@@ -29,6 +30,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Add loading state
   const { login } = useAuth();
   const router = useRouter();
   const { theme } = useTheme();
@@ -83,6 +85,7 @@ export default function Login() {
     
     try {
       setError("");
+      setIsLoading(true); // Show loader
       const user = await login(email, password);
       if(user.activities?.length === 0) 
       {
@@ -95,6 +98,8 @@ export default function Login() {
       
     } catch (err) {
       setError("Invalid email or password");
+    } finally {
+      setIsLoading(false); // Hide loader
     }
   };
 
@@ -106,6 +111,14 @@ export default function Login() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
+        
+        {/* Add the loader component */}
+        <Loader 
+          visible={isLoading} 
+          text="Logging in..." 
+          color={theme.primary}
+        />
+        
         <KeyboardAvoidingView 
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.keyboardAvoidingView}

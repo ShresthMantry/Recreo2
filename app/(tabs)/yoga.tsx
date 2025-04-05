@@ -346,7 +346,7 @@ export default function YogaScreen() {
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>Yoga</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Yoga & Wellness</Text>
         <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
           Find your inner peace
         </Text>

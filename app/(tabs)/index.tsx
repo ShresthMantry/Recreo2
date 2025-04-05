@@ -18,6 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { format } from "date-fns";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from 'expo-haptics';
+import Loader from "../../components/Loader";
 
 // Mock data for recent activities - replace with actual data in production
 const mockRecentActivities = [
@@ -180,6 +181,14 @@ export default function Home() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      {/* Add the loader component */}
+      <Loader 
+        visible={isLoading} 
+        text="Welcome to Recreo" 
+        color={theme.primary}
+        type="fullscreen"
+      />
+      
       <Animated.ScrollView 
         style={[
           styles.container, 

@@ -27,7 +27,7 @@ const allActivities = [
   { name: "Journal", icon: "journal" },
   { name: "Community-Sharing", icon: "people" },
   { name: "Games", icon: "game-controller" },
-  { name: "Yoga", icon: "yoga"}
+  { name: "Yoga", icon: "fitness"}
 ];
 
 export default function More() {
@@ -111,7 +111,7 @@ export default function More() {
       case 'journal': return ['#4CAF50', '#2E7D32'];
       case 'community-sharing': return ['#2196F3', '#1976D2'];
       case 'games': return ['#FF9800', '#F57C00'];
-      case 'yoga': return ['#8E24AA', '#6A1B9A']; // Added gradient for yoga
+      case 'yoga': return ['#009688', '#00796B']; // Added gradient for yoga
       default: return ['#607D8B', '#455A64'];
     }
   };
