@@ -21,8 +21,8 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     paddingBottom: 0,
     paddingTop: 0,
-    elevation: 8,
-    shadowColor: "#8B5CF6",
+    elevation: 3,
+    shadowColor: "#4CC9F0",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     borderRadius: 22.5, // Half of width/height
     alignSelf: "center",
   },
-  indicator: {
+indicatorStyle: {
     position: "absolute",
     height: 4, // Increased from 3
     width: 30, // Increased from 25
@@ -126,7 +126,8 @@ export default function TabsLayout() {
     "books",
     "journal",
     "community-sharing",
-    "games"
+    "games",
+    "yoga"
   ];
 
   // Animation for tab change with haptic feedback
@@ -134,8 +135,8 @@ export default function TabsLayout() {
     // Trigger haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
-    // Fixed number of tabs: home + 3 activities + more + settings = 6
-    const numTabs = 6;
+    // Calculate number of tabs dynamically based on user role
+    const numTabs = visibleTabs.length; // Use actual number of visible tabs
     const tabWidth = (width - 48) / numTabs; // Account for left/right padding
     const offsetX = index * tabWidth + (tabWidth / 2 - 12.5);
 
@@ -175,7 +176,14 @@ export default function TabsLayout() {
   };
 
   // Only include home, 3 activities, more, settings
-  const visibleTabs = ["index", ...activityTabs.filter(a => allPossibleActivities.includes(a)).slice(0, 3), "more", "settings"];
+  // const visibleTabs = ["index", ...activityTabs.filter(a => allPossibleActivities.includes(a)).slice(0, 3), "more", "settings"];
+  const visibleTabs = [
+    "index", 
+    ...activityTabs.filter(a => allPossibleActivities.includes(a)).slice(0, 3), 
+    "more", 
+    "settings",
+    ...(user?.role === 'admin' ? ['users'] : [])
+  ];
 
   return (
     <Tabs
@@ -184,7 +192,10 @@ export default function TabsLayout() {
         
         return {
           headerShown: false,
-          tabBarStyle: styles.tabBar,
+          tabBarStyle: {
+            ...styles.tabBar,
+            shadowColor: isDark ? "#4CC9F0" : theme.primary, // Dynamic shadow color based on theme
+          },
           tabBarActiveTintColor: theme.primary,
           tabBarInactiveTintColor: isDark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)",
           tabBarShowLabel: false,
@@ -332,6 +343,10 @@ export default function TabsLayout() {
                     iconName = "game-controller";
                     outlineName = "game-controller-outline";
                     break;
+                  case "yoga":
+                    iconName = "fitness";
+                    outlineName = "fitness-outline";
+                    break;
                   default:
                     iconName = "help";
                     outlineName = "help-outline";
@@ -369,7 +384,7 @@ export default function TabsLayout() {
             <Ionicons 
               name={focused ? "apps" : "apps-outline"} 
               color={color} 
-              size={26} // Increased from 22 to 26
+              size={26}
             />
           ),
         }}
@@ -383,13 +398,27 @@ export default function TabsLayout() {
             <Ionicons 
               name={focused ? "settings" : "settings-outline"} 
               color={color} 
-              size={26} // Increased from 22 to 26
+              size={26}
             />
           ),
         }}
       />
 
-      {/* Admin tab is removed */}
+      {/* Users tab - only visible for admin */}
+      <Tabs.Screen
+        name="users"
+        options={{
+          title: 'Users',
+          href: user?.role === 'admin' ? undefined : null, // Only include in navigation if admin
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? "people" : "people-outline"} 
+              size={26} 
+              color={color} 
+            />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

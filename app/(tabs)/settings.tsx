@@ -16,6 +16,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import Loader from "../../components/Loader";
 
 const activitiesList = [
   "Music",
@@ -24,6 +25,7 @@ const activitiesList = [
   "Journal",
   "Community Sharing",
   "Games",
+  "Yoga"
 ];
 
 export default function Settings() {
@@ -33,8 +35,11 @@ export default function Settings() {
   const [selectedActivities, setSelectedActivities] = useState<string[]>(user?.activities || []);
   const router = useRouter();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showWarningModal, setShowWarningModal] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
-
+  const [warningFadeAnim] = useState(new Animated.Value(0));
+  const [isLoading, setIsLoading] = useState(false); // Add loading state
+  
   // Animation for success modal
   useEffect(() => {
     if (showSuccessModal) {
@@ -59,6 +64,30 @@ export default function Settings() {
     }
   }, [showSuccessModal]);
 
+  // Animation for warning modal
+  useEffect(() => {
+    if (showWarningModal) {
+      Animated.timing(warningFadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+
+      // Auto-hide the modal after 3 seconds
+      const timer = setTimeout(() => {
+        Animated.timing(warningFadeAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          setShowWarningModal(false);
+        });
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [showWarningModal]);
+
   const toggleActivity = (activity: string) => {
     if (selectedActivities.includes(activity)) {
       setSelectedActivities(selectedActivities.filter((item) => item !== activity));
@@ -68,9 +97,34 @@ export default function Settings() {
   };
 
   const handleSave = async () => {
-    await updateUser({ name, activities: selectedActivities });
-    setShowSuccessModal(true);
-    // router.replace("/(tabs)/settings"); - No need to replace the route
+    // Validate that exactly 3 activities are selected
+    if (selectedActivities.length !== 3) {
+      // Show warning modal instead of Alert
+      setShowWarningModal(true);
+      return;
+    }
+    
+    setIsLoading(true); // Show loader
+    try {
+      await updateUser({ name, activities: selectedActivities });
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("Error updating user:", error);
+    } finally {
+      setIsLoading(false); // Hide loader
+    }
+  };
+
+  const handleLogout = async () => {
+    setIsLoading(true); // Show loader
+    try {
+      await logout();
+      // Router will handle redirection in AuthContext
+    } catch (error) {
+      console.error("Error logging out:", error);
+    } finally {
+      setIsLoading(false); // Hide loader
+    }
   };
 
   const handleThemeModeChange = (mode: 'light' | 'dark' | 'system') => {
@@ -80,6 +134,13 @@ export default function Settings() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+      
+      {/* Add the loader component */}
+      <Loader 
+        visible={isLoading} 
+        text="Saving changes..." 
+        color={theme.primary}
+      />
       
       {/* Success Modal */}
       <Modal
@@ -113,6 +174,48 @@ export default function Settings() {
             <Text style={[styles.successMessage, { color: theme.secondaryText }]}>
               Your settings have been updated
             </Text>
+          </Animated.View>
+        </View>
+      </Modal>
+      
+      {/* Warning Modal */}
+      <Modal
+        transparent={true}
+        visible={showWarningModal}
+        animationType="none"
+        onRequestClose={() => setShowWarningModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View 
+            style={[
+              styles.warningModal, 
+              { 
+                backgroundColor: theme.cardBackground,
+                opacity: warningFadeAnim,
+                transform: [
+                  {
+                    translateY: warningFadeAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [20, 0],
+                    }),
+                  },
+                ],
+              }
+            ]}
+          >
+            <View style={styles.warningIconContainer}>
+              <Ionicons name="warning" size={50} color="#f59e0b" />
+            </View>
+            <Text style={[styles.warningTitle, { color: theme.text }]}>Invalid Selection</Text>
+            <Text style={[styles.warningMessage, { color: theme.secondaryText }]}>
+              Please select exactly 3 activities.
+            </Text>
+            <TouchableOpacity 
+              style={[styles.dismissButton, { backgroundColor: '#f59e0b' }]}
+              onPress={() => setShowWarningModal(false)}
+            >
+              <Text style={styles.dismissButtonText}>OK</Text>
+            </TouchableOpacity>
           </Animated.View>
         </View>
       </Modal>
@@ -260,7 +363,7 @@ export default function Settings() {
 
             <TouchableOpacity 
               style={[styles.logoutButton, { backgroundColor: theme.error }]} 
-              onPress={logout}
+              onPress={handleLogout} // Use the new handleLogout function
             >
               <Ionicons name="log-out-outline" size={20} color="#ffffff" style={styles.buttonIcon} />
               <Text style={styles.logoutButtonText}>Logout</Text>
@@ -458,5 +561,42 @@ const styles = StyleSheet.create({
   successMessage: {
     fontSize: 16,
     textAlign: 'center',
+  },
+  
+  // New styles for the warning modal
+  warningModal: {
+    width: '80%',
+    padding: 24,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  warningIconContainer: {
+    marginBottom: 16,
+  },
+  warningTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  warningMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  dismissButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  dismissButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

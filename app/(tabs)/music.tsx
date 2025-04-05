@@ -439,7 +439,7 @@ export default function YouTubeMusicPlayer() {
             { color: theme.secondaryText },
             activeTab === 'discover' && [styles.activeTabText, { color: theme.primary }]
           ]}>
-            Discover
+            Discover-
           </Text>
         </TouchableOpacity>
         <TouchableOpacity

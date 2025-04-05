@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,11 @@ import {
   FlatList,
   RefreshControl,
   Animated,
+  Modal,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useAuth } from "../../context/AuthContext";
@@ -24,6 +29,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from 'expo-file-system';
 import * as Haptics from "expo-haptics";
 import { decode } from 'base64-arraybuffer';
+import { BlurView } from 'expo-blur';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -58,6 +64,21 @@ interface Comment {
   created_at: string;
 }
 
+// Add new interfaces for delete confirmation
+interface DeleteConfirmation {
+  visible: boolean;
+  type: "post" | "comment";
+  id: string;
+}
+
+interface SuccessMessage {
+  visible: boolean;
+  message: string;
+}
+
+
+const { width, height } = Dimensions.get('window');
+
 export default function CommunitySharing() {
   const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -71,11 +92,42 @@ export default function CommunitySharing() {
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState<"feed" | "comments">("feed");
   const { theme, isDark } = useTheme();
+
+  const commentsFlatListRef = useRef<FlatList>(null);
+  
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "content" | "username">("all");
   const [showFilterOptions, setShowFilterOptions] = useState(false);
+  
+  // New state for create post modal
+  const [showCreatePostModal, setShowCreatePostModal] = useState(false);
+
+  // Add new state for delete confirmation and success message
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmation>({
+    visible: false,
+    type: "post",
+    id: ""
+  });
+  const [successMessage, setSuccessMessage] = useState<SuccessMessage>({
+    visible: false,
+    message: ""
+  });
+  // Animation values for delete confirmation and success message
+  const deleteModalAnim = useRef(new Animated.Value(0)).current;
+  const successModalAnim = useRef(new Animated.Value(0)).current;
+  const successIconAnim = useRef(new Animated.Value(0)).current;
+
+  
+
+  
+  // Animation values
+  const fabAnim = useRef(new Animated.Value(1)).current;
+  const modalScaleAnim = useRef(new Animated.Value(0.9)).current;
+  const modalOpacityAnim = useRef(new Animated.Value(0)).current;
+  const searchBarAnim = useRef(new Animated.Value(0)).current;
+  const postAnimations = useRef<{[key: string]: Animated.Value}>({}).current;
 
   const generateTempId = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -148,6 +200,32 @@ export default function CommunitySharing() {
     }
   }, [selectedPostId]);
 
+  // Initialize post animations when posts change
+  useEffect(() => {
+    posts.forEach(post => {
+      if (!postAnimations[post.id]) {
+        postAnimations[post.id] = new Animated.Value(0);
+        
+        // Animate each post entry
+        Animated.spring(postAnimations[post.id], {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }).start();
+      }
+    });
+  }, [posts]);
+
+  // Animate search bar on mount
+  useEffect(() => {
+    Animated.timing(searchBarAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
   const fetchPosts = async () => {
     try {
       setIsLoading(true);
@@ -211,10 +289,73 @@ export default function CommunitySharing() {
   
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setImage(result.assets[0].uri);
+        // Add haptic feedback when image is selected
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
     } catch (error) {
       handleError(error);
     }
+  };
+
+  const openCreatePostModal = () => {
+    // Reset content and image
+    setNewPostContent("");
+    setImage(null);
+    
+    setShowCreatePostModal(true);
+    // Animate FAB
+    Animated.sequence([
+      Animated.timing(fabAnim, {
+        toValue: 0.8,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fabAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    // Animate modal
+    Animated.parallel([
+      Animated.timing(modalScaleAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(modalOpacityAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const closeCreatePostModal = () => {
+    // Animate modal closing
+    Animated.parallel([
+      Animated.timing(modalScaleAnim, {
+        toValue: 0.9,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(modalOpacityAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowCreatePostModal(false);
+      setImage(null);
+      setNewPostContent("");
+    });
+    
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const createPost = async () => {
@@ -234,8 +375,22 @@ export default function CommunitySharing() {
       updated_at: new Date().toISOString(),
     };
 
+    // Close modal first
+    closeCreatePostModal();
+    
+    // Add post to state
     setPosts(prev => [optimisticPost, ...prev]);
-    setNewPostContent("");
+    
+    // Initialize animation for the new post
+    postAnimations[tempId] = new Animated.Value(0);
+    Animated.spring(postAnimations[tempId], {
+      toValue: 1,
+      friction: 8,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+    
+    // Success haptic feedback
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     let imageUrl: string | null = null;
@@ -331,73 +486,192 @@ export default function CommunitySharing() {
     }
   };
 
+  // Replace deletePost function
   const deletePost = async (postId: string) => {
     try {
-      Alert.alert(
-        "Delete Post",
-        "Are you sure you want to delete this post?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: async () => {
-              // Find the post to get the image_url before deleting
-              const postToDelete = posts.find(post => post.id === postId);
-              
-              // Optimistic update
-              setPosts(prev => prev.filter(post => post.id !== postId));
-              if (selectedPostId === postId) {
-                setSelectedPostId(null);
-                setViewMode("feed");
-              }
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-              // Delete from database
-              const { error } = await supabase
-                .from("community_posts")
-                .delete()
-                .eq("id", postId);
-
-              if (error) throw error;
-              
-              // Delete the image from storage if it exists
-              if (postToDelete?.image_url) {
-                try {
-                  const imagePath = postToDelete.image_url.replace('https://ysavghvmswenmddlnshr.supabase.co/storage/v1/object/public/community-images/', '');
-                  await supabase.storage
-                    .from("community-images")
-                    .remove([imagePath]);
-                } catch (imageDeleteError) {
-                  console.error("Failed to delete image:", imageDeleteError);
-                  // Continue anyway as the post is already deleted
-                }
-              }
-            },
-          },
-        ]
-      );
+      // Show delete confirmation
+      setDeleteConfirmation({
+        visible: true,
+        type: "post",
+        id: postId
+      });
+      
+      // Animate the modal
+      Animated.spring(deleteModalAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true
+      }).start();
+      
+      // Haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       handleError(error);
-      fetchPosts();
     }
   };
 
+  // Replace deleteComment function
   const deleteComment = async (commentId: string) => {
     try {
-      setComments(prev => prev.filter(comment => comment.id !== commentId));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      const { error } = await supabase
-        .from("community_comments")
-        .delete()
-        .eq("id", commentId);
-
-      if (error) throw error;
+      // Show delete confirmation
+      setDeleteConfirmation({
+        visible: true,
+        type: "comment",
+        id: commentId
+      });
+      
+      // Animate the modal
+      Animated.spring(deleteModalAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true
+      }).start();
+      
+      // Haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       handleError(error);
-      if (selectedPostId) fetchComments(selectedPostId);
     }
+  };
+
+  // Add new function to confirm deletion
+  const confirmDelete = async () => {
+    try {
+      // Close the confirmation modal first
+      closeDeleteConfirmation();
+      
+      if (deleteConfirmation.type === "post") {
+        const postId = deleteConfirmation.id;
+        const postToDelete = posts.find(post => post.id === postId);
+        
+        // Animate the post removal
+        Animated.timing(postAnimations[postId], {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          // Optimistic update
+          setPosts(prev => prev.filter(post => post.id !== postId));
+          if (selectedPostId === postId) {
+            setSelectedPostId(null);
+            setViewMode("feed");
+          }
+        });
+        
+        // Delete from database
+        const { error } = await supabase
+          .from("community_posts")
+          .delete()
+          .eq("id", postId);
+
+        if (error) throw error;
+        
+        // Delete the image from storage if it exists
+        if (postToDelete?.image_url) {
+          try {
+            const imagePath = postToDelete.image_url.replace('https://ysavghvmswenmddlnshr.supabase.co/storage/v1/object/public/community-images/', '');
+            await supabase.storage
+              .from("community-images")
+              .remove([imagePath]);
+          } catch (imageDeleteError) {
+            console.error("Failed to delete image:", imageDeleteError);
+          }
+        }
+        
+        // Show success message
+        showSuccessMessage("Post deleted successfully");
+      } else {
+        const commentId = deleteConfirmation.id;
+        
+        // Optimistic update
+        setComments(prev => prev.filter(comment => comment.id !== commentId));
+        
+        // Delete from database
+        const { error } = await supabase
+          .from("community_comments")
+          .delete()
+          .eq("id", commentId);
+
+        if (error) throw error;
+        
+        // Show success message
+        showSuccessMessage("Comment deleted successfully");
+      }
+    } catch (error) {
+      handleError(error);
+      if (deleteConfirmation.type === "post") {
+        fetchPosts();
+      } else if (selectedPostId) {
+        fetchComments(selectedPostId);
+      }
+    }
+  };
+
+  // Add function to close delete confirmation
+  const closeDeleteConfirmation = () => {
+    Animated.timing(deleteModalAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setDeleteConfirmation(prev => ({...prev, visible: false}));
+    });
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Add function to show success message
+  const showSuccessMessage = (message: string) => {
+    setSuccessMessage({
+      visible: true,
+      message
+    });
+    
+    // Animate success modal and icon
+    Animated.sequence([
+      Animated.spring(successModalAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true
+      }),
+      Animated.spring(successIconAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true
+      })
+    ]).start();
+    
+    // Haptic success feedback
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Auto hide after 2 seconds
+    setTimeout(() => {
+      closeSuccessMessage();
+    }, 2000);
+  };
+
+  // Add function to close success message
+  const closeSuccessMessage = () => {
+    Animated.parallel([
+      Animated.timing(successModalAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(successIconAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      setSuccessMessage(prev => ({...prev, visible: false}));
+      // Reset animation values
+      successIconAnim.setValue(0);
+    });
   };
 
   const formatDate = (dateString: string) => {
@@ -427,12 +701,14 @@ export default function CommunitySharing() {
   // Toggle filter options visibility
   const toggleFilterOptions = () => {
     setShowFilterOptions(!showFilterOptions);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   // Set filter type and hide options
   const setFilter = (type: "all" | "content" | "username") => {
     setFilterType(type);
     setShowFilterOptions(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   if (!user) {
@@ -452,24 +728,251 @@ export default function CommunitySharing() {
       <StatusBar style={isDark ? "light" : "dark"} />
       
       <View style={[styles.header, { borderBottomColor: theme.divider }]}>
-        <Text style={[styles.title, { color: theme.text }]}>Community</Text>
-        {viewMode === "comments" && (
-          <TouchableOpacity
-            onPress={() => {
-              setViewMode("feed");
-              setSelectedPostId(null);
-            }}
-            style={[styles.backButton, { backgroundColor: theme.surfaceHover }]}
-          >
-            <Ionicons name="arrow-back" size={24} color={theme.primary} />
-          </TouchableOpacity>
+        {viewMode === "comments" ? (
+          <>
+            <TouchableOpacity
+              onPress={() => {
+                setViewMode("feed");
+                setSelectedPostId(null);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              style={[styles.backButton, { backgroundColor: theme.surfaceHover }]}
+            >
+              <Ionicons name="arrow-back" size={24} color={theme.primary} />
+            </TouchableOpacity>
+            <Text style={[styles.title, { color: theme.text }]}>Community</Text>
+            <View style={styles.headerRightPlaceholder} />
+          </>
+        ) : (
+          <>
+            <Text style={[styles.title, { color: theme.text }]}>Community</Text>
+            <TouchableOpacity
+              onPress={openCreatePostModal}
+              style={[styles.createButton, { backgroundColor: theme.primary }]}
+            >
+              <Ionicons name="add" size={20} color="white" />
+              <Text style={styles.createButtonText}>Post</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
+       {/* Create Post Modal */}
+             {/* Create Post Modal */}
+             <Modal
+        visible={showCreatePostModal}
+        transparent={true}
+        animationType="none"
+        onRequestClose={closeCreatePostModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalContainer}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
+        >
+          <BlurView intensity={isDark ? 40 : 20} style={styles.blurView} tint={isDark ? "dark" : "light"}>
+            <Animated.View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: theme.cardBackground,
+                  transform: [{ scale: modalScaleAnim }],
+                  opacity: modalOpacityAnim
+                }
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Create Post</Text>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    onPress={createPost}
+                    disabled={!newPostContent.trim() || uploading}
+                    style={[
+                      styles.headerPostButton,
+                      { backgroundColor: theme.primary },
+                      (!newPostContent.trim() || uploading) && styles.disabledButton,
+                    ]}
+                  >
+                    {uploading ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Text style={styles.headerPostButtonText}>Post</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={closeCreatePostModal} style={styles.closeButton}>
+                    <Ionicons name="close" size={24} color={theme.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              <TextInput
+                style={[
+                  styles.postInput,
+                  {
+                    color: theme.text,
+                    backgroundColor: theme.inputBackground,
+                    borderColor: theme.inputBorder,
+                  },
+                ]}
+                placeholder="What's on your mind?"
+                placeholderTextColor={theme.secondaryText}
+                multiline
+                value={newPostContent}
+                onChangeText={setNewPostContent}
+              />
+              
+              {image && (
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: image }} style={styles.imagePreview} resizeMode="cover" />
+                  <TouchableOpacity
+                    onPress={() => {
+                      setImage(null);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    style={[styles.removeImageButton, { backgroundColor: 'rgba(0,0,0,0.6)' }]}
+                  >
+                    <Ionicons name="close" size={20} color="white" />
+                  </TouchableOpacity>
+                </View>
+              )}
+              
+              {/* Image picker button only */}
+              <TouchableOpacity
+                onPress={pickImage}
+                style={[styles.imagePickerButton, { backgroundColor: theme.surfaceHover }]}
+              >
+                <Ionicons name="image-outline" size={20} color={theme.primary} />
+                <Text style={[styles.imagePickerText, { color: theme.text }]}>Add Image</Text>
+              </TouchableOpacity>
+              
+              {/* Remove the dismiss keyboard button */}
+            </Animated.View>
+          </BlurView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+       {/* Delete Confirmation Modal */}
+       <Modal
+        visible={deleteConfirmation.visible}
+        transparent={true}
+        animationType="none"
+        onRequestClose={closeDeleteConfirmation}
+      >
+        <BlurView intensity={isDark ? 40 : 20} style={styles.blurView} tint={isDark ? "dark" : "light"}>
+          <Animated.View
+            style={[
+              styles.deleteModalContent,
+              {
+                backgroundColor: theme.cardBackground,
+                transform: [
+                  { scale: deleteModalAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1]
+                  }) }
+                ],
+                opacity: deleteModalAnim
+              }
+            ]}
+          >
+            <View style={styles.deleteModalHeader}>
+              <Ionicons 
+                name="warning" 
+                size={40} 
+                color={theme.error} 
+                style={styles.deleteWarningIcon} 
+              />
+              <Text style={[styles.deleteModalTitle, { color: theme.text }]}>
+                Confirm Delete
+              </Text>
+            </View>
+            
+            <Text style={[styles.deleteModalMessage, { color: theme.secondaryText }]}>
+              {deleteConfirmation.type === "post" 
+                ? "Are you sure you want to delete this post? This action cannot be undone."
+                : "Are you sure you want to delete this comment? This action cannot be undone."
+              }
+            </Text>
+            
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity
+                onPress={closeDeleteConfirmation}
+                style={[styles.deleteModalButton, { backgroundColor: theme.surfaceHover }]}
+              >
+                <Text style={[styles.deleteModalButtonText, { color: theme.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                onPress={confirmDelete}
+                style={[styles.deleteModalButton, { backgroundColor: theme.error }]}
+              >
+                <Text style={styles.deleteModalButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </BlurView>
+      </Modal>
+
+       {/* Success Message Modal */}
+       <Modal
+        visible={successMessage.visible}
+        transparent={true}
+        animationType="none"
+      >
+        <View style={styles.successModalContainer}>
+          <Animated.View
+            style={[
+              styles.successModalContent,
+              {
+                backgroundColor: theme.cardBackground,
+                transform: [
+                  { translateY: successModalAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-100, 0]
+                  }) }
+                ],
+                opacity: successModalAnim
+              }
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.successIconContainer,
+                {
+                  backgroundColor: theme.success,
+                  transform: [
+                    { scale: successIconAnim }
+                  ]
+                }
+              ]}
+            >
+              <Ionicons name="checkmark" size={24} color="white" />
+            </Animated.View>
+            
+            <Text style={[styles.successMessage, { color: theme.text }]}>
+              {successMessage.message}
+            </Text>
+          </Animated.View>
+        </View>
+      </Modal>
 
       {viewMode === "feed" ? (
         <>
-          {/* Search bar */}
-          <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground }]}>
+          {/* Search bar with animation */}
+          <Animated.View 
+            style={[
+              styles.searchContainer, 
+              { 
+                backgroundColor: theme.cardBackground,
+                transform: [
+                  { translateY: searchBarAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-20, 0]
+                  })},
+                  { scale: searchBarAnim }
+                ],
+                opacity: searchBarAnim
+              }
+            ]}
+          >
             <View style={[styles.searchInputWrapper, { backgroundColor: theme.inputBackground }]}>
               <Ionicons name="search" size={20} color={theme.secondaryText} style={styles.searchIcon} />
               <TextInput
@@ -481,7 +984,10 @@ export default function CommunitySharing() {
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity 
-                  onPress={() => setSearchQuery("")}
+                  onPress={() => {
+                    setSearchQuery("");
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
                   style={styles.clearButton}
                 >
                   <Ionicons name="close-circle" size={20} color={theme.secondaryText} />
@@ -494,7 +1000,7 @@ export default function CommunitySharing() {
             >
               <Ionicons name="filter" size={20} color={theme.primary} />
             </TouchableOpacity>
-          </View>
+          </Animated.View>
 
           {/* Filter options */}
           {showFilterOptions && (
@@ -538,52 +1044,6 @@ export default function CommunitySharing() {
             </View>
           )}
 
-          <View style={[styles.createPostContainer, { backgroundColor: theme.cardBackground }]}>
-            <TextInput
-              style={[styles.postInput, { color: theme.text, backgroundColor: theme.inputBackground }]}
-              placeholder="What's on your mind?"
-              placeholderTextColor={theme.secondaryText}
-              multiline
-              value={newPostContent}
-              onChangeText={setNewPostContent}
-            />
-            {image && (
-              <View style={styles.imagePreviewContainer}>
-                <Image source={{ uri: image }} style={styles.imagePreview} />
-                <TouchableOpacity
-                  style={[styles.removeImageButton, { backgroundColor: theme.error }]}
-                  onPress={() => setImage(null)}
-                >
-                  <Ionicons name="close" size={20} color="white" />
-                </TouchableOpacity>
-              </View>
-            )}
-            <View style={styles.postActions}>
-              <TouchableOpacity 
-                onPress={pickImage} 
-                style={[styles.actionButton, { backgroundColor: theme.surfaceHover }]}
-              >
-                <Ionicons name="image-outline" size={24} color={theme.primary} />
-                <Text style={[styles.actionButtonText, { color: theme.text }]}>Add Image</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={createPost}
-                style={[
-                  styles.postButton,
-                  { backgroundColor: theme.primary },
-                  (!newPostContent.trim() || uploading) && styles.disabledButton,
-                ]}
-                disabled={uploading || !newPostContent.trim()}
-              >
-                {uploading ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text style={styles.postButtonText}> Post </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-
           {isLoading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={theme.primary} />
@@ -603,7 +1063,17 @@ export default function CommunitySharing() {
                 <Animated.View 
                   style={[
                     styles.postContainer, 
-                    { backgroundColor: theme.cardBackground }
+                    { 
+                      backgroundColor: theme.cardBackground,
+                      transform: [
+                        { scale: postAnimations[item.id] || new Animated.Value(1) },
+                        { translateY: (postAnimations[item.id] || new Animated.Value(1)).interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [50, 0]
+                        })}
+                      ],
+                      opacity: postAnimations[item.id] || new Animated.Value(1)
+                    }
                   ]}
                 >
                   <View style={styles.postHeader}>
@@ -622,7 +1092,7 @@ export default function CommunitySharing() {
                         </Text>
                       </View>
                     </View>
-                    {item.user_email === user.email && (
+                    {(item.user_email === user.email || user.role === 'admin') && (
                       <TouchableOpacity
                         onPress={() => deletePost(item.id)}
                         style={[styles.deleteButton, { backgroundColor: theme.surfaceHover }]}
@@ -648,6 +1118,7 @@ export default function CommunitySharing() {
                     onPress={() => {
                       setSelectedPostId(item.id);
                       setViewMode("comments");
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     }}
                     style={[styles.commentButton, { backgroundColor: theme.surfaceHover }]}
                   >
@@ -668,82 +1139,107 @@ export default function CommunitySharing() {
               contentContainerStyle={styles.postsList}
             />
           )}
-        </>
-      ) : (
-        // Comments View
-        <>
-          {selectedPostId && posts.find((p) => p.id === selectedPostId) && (
-            <View style={[styles.commentsHeader, { backgroundColor: theme.cardBackground }]}>
-              <Text style={[styles.commentsTitle, { color: theme.text }]}>
-                Comments on {posts.find((p) => p.id === selectedPostId)?.username}'s post
-              </Text>
-            </View>
-          )}
           
-          <FlatList
-            data={comments}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={[styles.commentContainer, { backgroundColor: theme.cardBackground }]}>
-                <View style={styles.commentHeader}>
-                  <View style={styles.userInfo}>
-                    <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
-                      <Text style={styles.avatarText}>
-                        {item.username.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <Text style={[styles.commentUsername, { color: theme.text }]}>
-                      {item.username}
+          
+        </>
+            ) : (
+              // Comments View
+              <>
+                {selectedPostId && posts.find((p) => p.id === selectedPostId) && (
+                  <View style={[styles.commentsHeader, { backgroundColor: theme.cardBackground }]}>
+                    <Text style={[styles.commentsTitle, { color: theme.text }]}>
+                      Comments on {posts.find((p) => p.id === selectedPostId)?.username}'s post
                     </Text>
                   </View>
-                  <Text style={[styles.commentDate, { color: theme.secondaryText }]}>
-                    {formatDate(item.created_at)}
-                  </Text>
-                  {item.user_email === user.email && (
+                )}
+                
+                <KeyboardAvoidingView 
+                  behavior={Platform.OS === "ios" ? "padding" : "height"}
+                  style={{ flex: 1 }}
+                  keyboardVerticalOffset={Platform.OS === "ios" ? -50 : 2}
+                >
+                  <View style={{ flex: 1 }}>
+                    <FlatList
+                      ref={commentsFlatListRef}
+                      data={comments}
+                      keyExtractor={(item) => item.id}
+                      renderItem={({ item }) => (
+                        <View style={[styles.commentContainer, { backgroundColor: theme.cardBackground }]}>
+                          <View style={styles.commentHeader}>
+                            <View style={styles.userInfo}>
+                              <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
+                                <Text style={styles.avatarText}>
+                                  {item.username.charAt(0).toUpperCase()}
+                                </Text>
+                              </View>
+                              <Text style={[styles.commentUsername, { color: theme.text }]}>
+                                {item.username}
+                              </Text>
+                            </View>
+                            <Text style={[styles.commentDate, { color: theme.secondaryText }]}>
+                              {formatDate(item.created_at)}
+                            </Text>
+                            {(item.user_email === user.email || user.role === 'admin') && (
+                              <TouchableOpacity
+                                onPress={() => deleteComment(item.id)}
+                                style={[styles.deleteButton, { backgroundColor: theme.surfaceHover }]}
+                              >
+                                <Ionicons name="trash-outline" size={18} color={theme.error} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          <Text style={[styles.commentContent, { color: theme.text }]}>{item.content}</Text>
+                        </View>
+                      )}
+                      ListEmptyComponent={
+                        <Text style={[styles.emptyState, { color: theme.secondaryText }]}>
+                          No comments yet. Be the first to comment!
+                        </Text>
+                      }
+                      // Add padding to the bottom to ensure content isn't hidden behind the input
+                      contentContainerStyle={{ paddingBottom: 100 }}
+                    />
+                  </View>
+                  
+                  <View style={[
+                    styles.commentInputContainer, 
+                    { 
+                      backgroundColor: theme.cardBackground,
+                      borderTopColor: theme.divider,
+                    }
+                  ]}>
+                    <TextInput
+                      style={[styles.commentInput, { 
+                        color: theme.text, 
+                        backgroundColor: theme.inputBackground,
+                        borderColor: theme.inputBorder
+                      }]}
+                      placeholder="Write a comment..."
+                      placeholderTextColor={theme.secondaryText}
+                      value={newCommentContent}
+                      onChangeText={setNewCommentContent}
+                    />
                     <TouchableOpacity
-                      onPress={() => deleteComment(item.id)}
-                      style={[styles.deleteButton, { backgroundColor: theme.surfaceHover }]}
+                      onPress={() => {
+                        addComment();
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        Keyboard.dismiss();
+                      }}
+                      style={[
+                        styles.sendButton,
+                        { backgroundColor: theme.primary },
+                        !newCommentContent.trim() && styles.disabledButton,
+                      ]}
+                      disabled={!newCommentContent.trim()}
                     >
-                      <Ionicons name="trash-outline" size={18} color={theme.error} />
+                      <Ionicons name="send" size={20} color="white" />
                     </TouchableOpacity>
-                  )}
-                </View>
-                <Text style={[styles.commentContent, { color: theme.text }]}>{item.content}</Text>
-              </View>
+                  </View>
+                </KeyboardAvoidingView>
+              </>
             )}
-            ListEmptyComponent={
-              <Text style={[styles.emptyState, { color: theme.secondaryText }]}>
-                No comments yet. Be the first to comment!
-              </Text>
-            }
-          />
-          
-          <View style={[styles.commentInputContainer, { backgroundColor: theme.cardBackground }]}>
-            <TextInput
-              style={[styles.commentInput, { 
-                color: theme.text, 
-                backgroundColor: theme.inputBackground,
-                borderColor: theme.inputBorder
-              }]}
-              placeholder="Write a comment..."
-              placeholderTextColor={theme.secondaryText}
-              value={newCommentContent}
-              onChangeText={setNewCommentContent}
-            />
-            <TouchableOpacity
-              onPress={addComment}
-              style={[
-                styles.sendButton,
-                { backgroundColor: theme.primary },
-                !newCommentContent.trim() && styles.disabledButton,
-              ]}
-              disabled={!newCommentContent.trim()}
-            >
-              <Ionicons name="send" size={20} color="white" />
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+
+      
     </SafeAreaView>
   );
 }
@@ -765,9 +1261,114 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  headerRightPlaceholder: {
+    width: 40, // Approximately the same width as the back button
+  },
+  // New create post button in header
+  createButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    justifyContent: 'center',
+  },
+  createButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
   title: {
     fontSize: 28,
     fontWeight: "bold",
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blurView: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: width * 0.9,
+    maxHeight: height * 0.7,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  closeButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  headerPostButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerPostButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  // New image picker button style
+  imagePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  imagePickerText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+ 
+  // New style for dismiss keyboard button
+  dismissKeyboardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  dismissKeyboardText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
   },
   subtitle: {
     fontSize: 16,
@@ -868,6 +1469,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 16,
+    marginBottom: 8,
   },
   actionButton: {
     flexDirection: 'row',
@@ -978,13 +1580,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  commentInputContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    borderTopWidth: 1,
+    alignItems: 'center',
+    // Add shadow to make it stand out
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 5,
+    // Remove absolute positioning and adjust padding
+    paddingBottom: Platform.OS === "ios" ? 70 : 86,
+    backgroundColor: 'transparent', // This will be overridden by the inline style
+  },
   commentInput: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    color: 'white',
-    borderRadius: 8,
+    borderRadius: 20,
     padding: 12,
     marginRight: 8,
+    fontSize: 16,
+    maxHeight: 100, // Limit height for multiline input
   },
   commentPostButton: {
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -1035,12 +1652,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginTop: 8,
   },
-  commentInputContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    borderTopWidth: 1,
-    alignItems: 'center',
-  },
   
   sendButton: {
     width: 40,
@@ -1070,4 +1681,101 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   
+  // Floating Action Button styles
+  fabContainer: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  fab: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Delete confirmation modal styles
+  deleteModalContent: {
+    width: width * 0.85,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  deleteModalHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  deleteWarningIcon: {
+    marginBottom: 12,
+  },
+  deleteModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  deleteModalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: '45%',
+    alignItems: 'center',
+  },
+  deleteModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+  },
+  
+  // Success message styles
+  successModalContainer: {
+    position: 'absolute',
+    top: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  successModalContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 30,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  successIconContainer: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  successMessage: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
 });

@@ -27,6 +27,7 @@ const allActivities = [
   { name: "Journal", icon: "journal" },
   { name: "Community-Sharing", icon: "people" },
   { name: "Games", icon: "game-controller" },
+  { name: "Yoga", icon: "fitness"}
 ];
 
 export default function More() {
@@ -90,19 +91,19 @@ export default function More() {
     });
   }, []);
 
-  const navigateToActivity = (activity) => {
+  const navigateToActivity = (activity: { name: string }) => {
     // Provide haptic feedback when selecting an activity
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     const route = `/(tabs)/${activity.name.toLowerCase()}`;
-    if (["/(tabs)/music", "/(tabs)/drawing", "/(tabs)/books", "/(tabs)/journal", "/(tabs)/community-sharing", "/(tabs)/games"].includes(route)) {
-      router.push(route as "/(tabs)/music" | "/(tabs)/drawing" | "/(tabs)/books" | "/(tabs)/journal" | "/(tabs)/community-sharing" | "/(tabs)/games");
+    if (["/(tabs)/music", "/(tabs)/drawing", "/(tabs)/books", "/(tabs)/journal", "/(tabs)/community-sharing", "/(tabs)/games", "/(tabs)/yoga"].includes(route)) {
+      router.push(route as "/(tabs)/music" | "/(tabs)/drawing" | "/(tabs)/books" | "/(tabs)/journal" | "/(tabs)/community-sharing" | "/(tabs)/games" | "/(tabs)/yoga");
     } else {
       console.error("Invalid route:", route);
     }
   };
 
-  const getActivityGradient = (activity) => {
+  const getActivityGradient = (activity: { name: string }) => {
     switch(activity.name.toLowerCase()) {
       case 'music': return ['#9C27B0', '#7B1FA2'];
       case 'drawing': return ['#F44336', '#D32F2F'];
@@ -110,11 +111,12 @@ export default function More() {
       case 'journal': return ['#4CAF50', '#2E7D32'];
       case 'community-sharing': return ['#2196F3', '#1976D2'];
       case 'games': return ['#FF9800', '#F57C00'];
+      case 'yoga': return ['#009688', '#00796B']; // Added gradient for yoga
       default: return ['#607D8B', '#455A64'];
     }
   };
 
-  const renderItem = ({ item, index }) => {
+  const renderItem = ({ item, index }: { item: { name: string; icon: string }; index: number }) => {
     const gradientColors = getActivityGradient(item);
     
     // Create a pulse animation for the card
@@ -157,17 +159,27 @@ export default function More() {
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={gradientColors}
+            colors={gradientColors as [string, string]}
             style={styles.gradientBackground}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
             <View style={styles.iconContainer}>
-              <Ionicons name={item.icon} size={32} color="#FFFFFF" />
+              <Ionicons 
+                name={item.icon as keyof typeof Ionicons.glyphMap} 
+                size={32} 
+                color="#FFFFFF" 
+              />
             </View>
-            <Text style={styles.activityName}>{item.name.replace('-', ' ')}</Text>
+            <Text style={styles.activityName}>
+              {item.name.replace(/-/g, ' ')}
+            </Text>
             <View style={styles.arrowContainer}>
-              <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
+              <Ionicons 
+                name="chevron-forward" 
+                size={24} 
+                color="#FFFFFF" 
+              />
             </View>
           </LinearGradient>
         </TouchableOpacity>

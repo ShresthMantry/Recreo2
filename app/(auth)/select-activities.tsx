@@ -14,6 +14,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import Loader from "../../components/Loader";
 
 // Activity data with icons
 const activitiesList = [
@@ -31,7 +32,8 @@ export default function SelectActivities() {
   const { theme } = useTheme();
   const router = useRouter();
   const [animation] = useState(new Animated.Value(0));
-
+  const [isLoading, setIsLoading] = useState(false); // Add loading state
+  
   // Animation when component mounts
   useEffect(() => {
     Animated.timing(animation, {
@@ -41,11 +43,11 @@ export default function SelectActivities() {
     }).start();
   }, []);
 
-  const toggleActivity = (activity) => {
-    if (selectedActivities.includes(activity)) {
+  const toggleActivity = (activity: string) => {
+    if (selectedActivities.includes(activity as never)) {
       setSelectedActivities(selectedActivities.filter((item) => item !== activity));
     } else if (selectedActivities.length < 3) {
-      setSelectedActivities([...selectedActivities, activity]);
+      setSelectedActivities([...selectedActivities, activity as never]);
       
       // Small animation when selecting an item
       const newAnimation = new Animated.Value(0);
@@ -59,8 +61,16 @@ export default function SelectActivities() {
 
   const handleContinue = async () => {
     if (selectedActivities.length === 3) {
-      await updateUser({ activities: selectedActivities });
-      router.replace("/(tabs)");
+      setIsLoading(true); // Show loader
+      try {
+        await updateUser({ activities: selectedActivities });
+        router.replace("/(tabs)");
+      } catch (error) {
+        alert("An error occurred. Please try again.");
+        console.error(error);
+      } finally {
+        setIsLoading(false); // Hide loader
+      }
     } else {
       alert("Please select exactly 3 activities.");
     }
@@ -73,6 +83,13 @@ export default function SelectActivities() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={theme.background === "#121212" ? "light-content" : "dark-content"} />
+      
+      {/* Add the loader component */}
+      <Loader 
+        visible={isLoading} 
+        text="Setting up your experience..." 
+        color={blueAccent}
+      />
       
       <View style={styles.headerShape}>
         <View style={[styles.headerShapeInner, { backgroundColor: blueAccent }]} />
@@ -117,7 +134,7 @@ export default function SelectActivities() {
 
         <View style={styles.activitiesContainer}>
           {activitiesList.map((activity, index) => {
-            const isSelected = selectedActivities.includes(activity.name);
+            const isSelected = selectedActivities.includes(activity.name as never);
             const delay = index * 100;
             
             return (
@@ -158,7 +175,7 @@ export default function SelectActivities() {
                     }
                   ]}>
                     <Ionicons 
-                      name={activity.icon} 
+                      name={activity.icon as keyof typeof Ionicons.glyphMap}
                       size={28} 
                       color={isSelected ? "white" : blueAccent} 
                     />
