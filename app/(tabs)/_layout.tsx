@@ -108,11 +108,13 @@ export default function TabsLayout() {
   useEffect(() => {
     // Normalize activity names and remove duplicates
     const normalizedActivities = activities.map(activity => 
-      activity.toLowerCase().replace(" ", "-")
+      activity.toLowerCase().replace(/\s+/g, "-") // Use regex to replace all spaces
     );
     const uniqueActivities = [...new Set(normalizedActivities)];
     // Limit to only 3 activities
     setActivityTabs(uniqueActivities.slice(0, 3));
+    console.log('Normalized activities:', normalizedActivities);
+    console.log('Activity tabs set to:', uniqueActivities.slice(0, 3));
   }, [activities]);
 
   if (!user) {
@@ -120,6 +122,7 @@ export default function TabsLayout() {
   }
 
   // All possible activity routes that exist in the app
+  // Update the allPossibleActivities array
   const allPossibleActivities = [
     "music",
     "drawing",
@@ -127,7 +130,8 @@ export default function TabsLayout() {
     "journal",
     "community-sharing",
     "games",
-    "yoga"
+    "yoga",
+    "news"  // Keep news in possible activities
   ];
 
   // Animation for tab change with haptic feedback
@@ -346,6 +350,10 @@ export default function TabsLayout() {
                   case "yoga":
                     iconName = "fitness";
                     outlineName = "fitness-outline";
+                    break;
+                  case "news":
+                    iconName = "newspaper";
+                    outlineName = "newspaper-outline";
                     break;
                   default:
                     iconName = "help";
