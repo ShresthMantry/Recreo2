@@ -1211,23 +1211,44 @@ export default function CommunitySharing() {
                     />
                   )}
                   
-                  <View style={styles.postActions}>
-                    {/* Like button */}
+                  <View style={[styles.postActions, { 
+                    backgroundColor: theme.cardBackground,
+                    borderTopColor: theme.divider
+                  }]}>
+                    {/* Like button - Improved UI */}
                     <TouchableOpacity
                       onPress={() => toggleLike(item.id)}
-                      style={[styles.actionButton, { backgroundColor: theme.surfaceHover }]}
+                      style={[
+                        styles.actionButton, 
+                        { 
+                          backgroundColor: likedPosts[item.id] 
+                            ? 'rgba(255, 75, 75, 0.1)' 
+                            : theme.surfaceHover 
+                        }
+                      ]}
+                      activeOpacity={0.7}
                     >
-                      <Ionicons 
-                        name={likedPosts[item.id] ? "heart" : "heart-outline"} 
-                        size={20} 
-                        color={likedPosts[item.id] ? "#FF4B4B" : theme.primary} 
-                      />
-                      <Text style={[styles.actionButtonText, { color: theme.text }]}>
+                      <Animated.View>
+                        <Ionicons 
+                          name={likedPosts[item.id] ? "heart" : "heart-outline"} 
+                          size={22} 
+                          color={likedPosts[item.id] ? "#FF4B4B" : theme.primary} 
+                        />
+                      </Animated.View>
+                      <Text 
+                        style={[
+                          styles.actionButtonText, 
+                          { 
+                            color: likedPosts[item.id] ? "#FF4B4B" : theme.text,
+                            fontWeight: likedPosts[item.id] ? '600' : '500'
+                          }
+                        ]}
+                      >
                         {(item.likes_count || 0) > 0 ? (item.likes_count || 0) : "Like"}
                       </Text>
                     </TouchableOpacity>
                     
-                    {/* Comment button */}
+                    {/* Comment button - Improved UI */}
                     <TouchableOpacity
                       onPress={() => {
                         setSelectedPostId(item.id);
@@ -1235,8 +1256,9 @@ export default function CommunitySharing() {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       }}
                       style={[styles.actionButton, { backgroundColor: theme.surfaceHover }]}
+                      activeOpacity={0.7}
                     >
-                      <Ionicons name="chatbubble-outline" size={20} color={theme.primary} />
+                      <Ionicons name="chatbubble-outline" size={22} color={theme.primary} />
                       <Text style={[styles.actionButtonText, { color: theme.primary }]}>
                         Comments
                       </Text>
