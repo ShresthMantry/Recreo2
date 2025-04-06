@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Share,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useAuth } from "../../context/AuthContext";
@@ -53,7 +54,13 @@ interface Post {
   image_url: string | null;
   created_at: string;
   updated_at: string;
+  likes_count?: number;
 }
+
+interface LikedPosts {
+  [key: string]: boolean;
+}
+
 
 interface Comment {
   id: string;
@@ -94,11 +101,15 @@ export default function CommunitySharing() {
   const { theme, isDark } = useTheme();
 
   const commentsFlatListRef = useRef<FlatList>(null);
+
+  const [likedPosts, setLikedPosts] = useState<LikedPosts>({});
+  
   
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "content" | "username">("all");
+    // Update the filter type state to include "liked"
+    const [filterType, setFilterType] = useState<"all" | "content" | "username" | "liked">("all");
   const [showFilterOptions, setShowFilterOptions] = useState(false);
   
   // New state for create post modal
@@ -186,6 +197,35 @@ export default function CommunitySharing() {
     }
   };
 
+  // Add the sharePost function
+  const sharePost = async (post: Post) => {
+    try {
+      let shareContent = {
+        message: `${post.username} shared: ${post.content}`,
+        url: post.image_url || undefined
+      };
+      
+      // Provide haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      const result = await Share.share(shareContent);
+      
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          // Shared with activity type of result.activityType
+          showSuccessMessage("Post shared successfully");
+        } else {
+          // Shared
+          showSuccessMessage("Post shared successfully");
+        }
+      } else if (result.action === Share.dismissedAction) {
+        // Dismissed
+      }
+    } catch (error) {
+      handleError(error);
+    }
+  };
+
   // Fetch all posts
   useEffect(() => {
     if (user?.email) {
@@ -226,6 +266,32 @@ export default function CommunitySharing() {
     }).start();
   }, []);
 
+  // Add function to fetch user's liked posts
+  const fetchLikedPosts = async () => {
+    if (!user?.email) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("community_likes")
+        .select("post_id")
+        .eq("user_email", user.email);
+      
+      if (error) throw error;
+      
+      const likedPostsMap: LikedPosts = {};
+      data?.forEach(item => {
+        likedPostsMap[item.post_id] = true;
+      });
+      
+      setLikedPosts(likedPostsMap);
+    } catch (error) {
+      handleError(error);
+    }
+  };
+
+
+
+  // Update fetchPosts to include likes_count
   const fetchPosts = async () => {
     try {
       setIsLoading(true);
@@ -243,11 +309,73 @@ export default function CommunitySharing() {
       })) || [];
       
       setPosts(postsWithImages);
+      
+      // Fetch liked posts after fetching posts
+      fetchLikedPosts();
     } catch (error) {
       handleError(error);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
+    }
+  };
+
+  // Add function to handle liking/unliking posts
+  const toggleLike = async (postId: string) => {
+    if (!user?.email) return;
+    
+    try {
+      // Optimistic update
+      const isCurrentlyLiked = likedPosts[postId];
+      
+      // Update UI immediately
+      setLikedPosts(prev => ({
+        ...prev,
+        [postId]: !isCurrentlyLiked
+      }));
+      
+      setPosts(prev => 
+        prev.map(post => 
+          post.id === postId 
+            ? { 
+                ...post, 
+                likes_count: (post.likes_count || 0) + (isCurrentlyLiked ? -1 : 1) 
+              } 
+            : post
+        )
+      );
+      
+      // Provide haptic feedback
+      Haptics.impactAsync(
+        isCurrentlyLiked 
+          ? Haptics.ImpactFeedbackStyle.Light 
+          : Haptics.ImpactFeedbackStyle.Medium
+      );
+      
+      if (isCurrentlyLiked) {
+        // Unlike post
+        const { error } = await supabase
+          .from("community_likes")
+          .delete()
+          .eq("post_id", postId)
+          .eq("user_email", user.email);
+          
+        if (error) throw error;
+      } else {
+        // Like post
+        const { error } = await supabase
+          .from("community_likes")
+          .insert({
+            post_id: postId,
+            user_email: user.email
+          });
+          
+        if (error) throw error;
+      }
+    } catch (error) {
+      // Revert optimistic update on error
+      handleError(error);
+      fetchPosts(); // Refresh to get correct state
     }
   };
 
@@ -678,25 +806,36 @@ export default function CommunitySharing() {
     return format(new Date(dateString), "MMM d, h:mm a");
   };
 
-  // Filter posts based on search query and filter type
-  const filteredPosts = posts.filter(post => {
-    if (!searchQuery.trim()) return true;
-    
-    const query = searchQuery.toLowerCase();
-    
-    switch (filterType) {
-      case "content":
-        return post.content.toLowerCase().includes(query);
-      case "username":
-        return post.username.toLowerCase().includes(query);
-      case "all":
-      default:
-        return (
-          post.content.toLowerCase().includes(query) ||
-          post.username.toLowerCase().includes(query)
-        );
-    }
-  });
+    // Filter posts based on search query and filter type
+    const filteredPosts = posts.filter(post => {
+      // First apply the likes filter if selected
+      if (filterType === "liked" && !likedPosts[post.id]) {
+        return false;
+      }
+      
+      if (!searchQuery.trim()) return true;
+      
+      const query = searchQuery.toLowerCase();
+      
+      switch (filterType) {
+        case "content":
+          return post.content.toLowerCase().includes(query);
+        case "username":
+          return post.username.toLowerCase().includes(query);
+        case "liked":
+          // For liked posts with search, we still want to filter by content/username
+          return (
+            post.content.toLowerCase().includes(query) ||
+            post.username.toLowerCase().includes(query)
+          );
+        case "all":
+        default:
+          return (
+            post.content.toLowerCase().includes(query) ||
+            post.username.toLowerCase().includes(query)
+          );
+      }
+    });
 
   // Toggle filter options visibility
   const toggleFilterOptions = () => {
@@ -704,8 +843,8 @@ export default function CommunitySharing() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // Set filter type and hide options
-  const setFilter = (type: "all" | "content" | "username") => {
+   // Set filter type and hide options
+   const setFilter = (type: "all" | "content" | "username" | "liked") => {
     setFilterType(type);
     setShowFilterOptions(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1002,8 +1141,8 @@ export default function CommunitySharing() {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Filter options */}
-          {showFilterOptions && (
+                    {/* Filter options */}
+                    {showFilterOptions && (
             <View style={[styles.filterOptions, { backgroundColor: theme.cardBackground }]}>
               <TouchableOpacity 
                 style={[
@@ -1038,6 +1177,21 @@ export default function CommunitySharing() {
               >
                 <Text style={[styles.filterOptionText, { color: theme.text }]}>Username</Text>
                 {filterType === "username" && (
+                  <Ionicons name="checkmark" size={18} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+              {/* New Liked Posts filter option */}
+              <TouchableOpacity 
+                style={[
+                  styles.filterOption, 
+                  filterType === "liked" && { backgroundColor: theme.surfaceHover }
+                ]}
+                onPress={() => setFilter("liked")}
+              >
+                <View style={styles.filterOptionContent}>
+                  <Text style={[styles.filterOptionText, { color: theme.text }]}>Liked Posts</Text>
+                </View>
+                {filterType === "liked" && (
                   <Ionicons name="checkmark" size={18} color={theme.primary} />
                 )}
               </TouchableOpacity>
@@ -1114,19 +1268,71 @@ export default function CommunitySharing() {
                     />
                   )}
                   
-                  <TouchableOpacity
-                    onPress={() => {
-                      setSelectedPostId(item.id);
-                      setViewMode("comments");
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    }}
-                    style={[styles.commentButton, { backgroundColor: theme.surfaceHover }]}
-                  >
-                    <Ionicons name="chatbubble-outline" size={18} color={theme.primary} />
-                    <Text style={[styles.commentButtonText, { color: theme.primary }]}>
-                      Comments
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={[styles.postActions, { 
+                    backgroundColor: theme.cardBackground,
+                    borderTopColor: theme.divider
+                  }]}>
+                    {/* Like button - Improved UI */}
+                    <TouchableOpacity
+                      onPress={() => toggleLike(item.id)}
+                      style={[
+                        styles.actionButton, 
+                        { 
+                          backgroundColor: likedPosts[item.id] 
+                            ? 'rgba(255, 75, 75, 0.08)' 
+                            : 'transparent' 
+                        }
+                      ]}
+                      activeOpacity={0.7}
+                    >
+                      <Animated.View>
+                        <Ionicons 
+                          name={likedPosts[item.id] ? "heart" : "heart-outline"} 
+                          size={22} 
+                          color={likedPosts[item.id] ? "#FF4B4B" : theme.primary} 
+                        />
+                      </Animated.View>
+                      <Text 
+                        style={[
+                          styles.actionButtonText, 
+                          { 
+                            color: likedPosts[item.id] ? "#FF4B4B" : theme.text,
+                            fontWeight: likedPosts[item.id] ? '600' : '500'
+                          }
+                        ]}
+                      >
+                        {(item.likes_count || 0) > 0 ? (item.likes_count || 0) : "Like"}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    {/* Comment button - Improved UI */}
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedPostId(item.id);
+                        setViewMode("comments");
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      }}
+                      style={[styles.actionButton, { backgroundColor: 'transparent' }]}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="chatbubble-outline" size={22} color={theme.primary} />
+                      <Text style={[styles.actionButtonText, { color: theme.primary }]}>
+                        Comments
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    {/* Share button - Improved UI */}
+                    <TouchableOpacity
+                      onPress={() => sharePost(item)}
+                      style={[styles.actionButton, { backgroundColor: 'transparent' }]}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="arrow-redo-outline" size={22} color={theme.primary} />
+                      <Text style={[styles.actionButtonText, { color: theme.primary }]}>
+                        Share
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </Animated.View>
               )}
               ListEmptyComponent={
@@ -1466,20 +1672,26 @@ const styles = StyleSheet.create({
   },
   postActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 8,
+    justifyContent: 'space-around',
+    padding: 8,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
   },
+  
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    justifyContent: 'center',
   },
+  
   actionButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
+    marginLeft: 6,
+    fontSize: 15,
+    fontWeight: '500',
   },
   postButton: {
     paddingHorizontal: 24,
@@ -1554,9 +1766,10 @@ const styles = StyleSheet.create({
   commentButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    justifyContent: 'center',
   },
   commentButtonText: {
     marginLeft: 8,
@@ -1777,5 +1990,9 @@ const styles = StyleSheet.create({
   successMessage: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  filterOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
