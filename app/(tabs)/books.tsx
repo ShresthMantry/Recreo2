@@ -11,10 +11,12 @@ import {
   SafeAreaView,
   StatusBar,
   Dimensions,
-  ScrollView
+  ScrollView,
+  Linking // Add this import
 } from "react-native";
 import axios from "axios";
 import { useTheme } from "../../context/ThemeContext";
+import { Ionicons } from "@expo/vector-icons";
 
 const GOOGLE_BOOKS_API_KEY = "AIzaSyAORif4JskaLIcWPwVHIEcZ2u-Y3vm6LWs";
 const { width } = Dimensions.get('window');
@@ -34,6 +36,7 @@ interface BookVolume {
       thumbnail?: string;
       smallThumbnail?: string;
     };
+    previewLink?: string; // Add this field for external link
   };
   saleInfo?: {
     listPrice?: {
@@ -69,8 +72,10 @@ export default function Books() {
   const fetchBooks = async (searchTerm: string): Promise<void> => {
     setLoading(true);
     try {
+      // Add a random parameter to get different results each time
+      const randomParam = `&startIndex=${Math.floor(Math.random() * 40)}`;
       const response = await axios.get<{items?: BookVolume[]}>(
-        `https://www.googleapis.com/books/v1/volumes?q=${searchTerm}&maxResults=15&key=${GOOGLE_BOOKS_API_KEY}`
+        `https://www.googleapis.com/books/v1/volumes?q=${searchTerm}&maxResults=15${randomParam}&key=${GOOGLE_BOOKS_API_KEY}`
       );
       setBooks(response.data.items || []);
     } catch (error) {
@@ -99,6 +104,31 @@ export default function Books() {
     setModalVisible(true);
   };
 
+  // Update the BookVolume interface to include previewLink
+  interface BookVolume {
+    id: string;
+    volumeInfo: {
+      title: string;
+      authors?: string[];
+      description?: string;
+      publisher?: string;
+      publishedDate?: string;
+      averageRating?: number;
+      ratingsCount?: number;
+      imageLinks?: {
+        thumbnail?: string;
+        smallThumbnail?: string;
+      };
+    };
+    saleInfo?: {
+      listPrice?: {
+        amount: number;
+        currencyCode: string;
+      };
+    };
+  }
+
+  // Add a link button to the book details modal
   const BookDetails: React.FC<BookDetailsProps> = ({ book, onClose }) => (
     <View style={styles.modalContainer}>
       <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
@@ -165,9 +195,20 @@ export default function Books() {
           {book.saleInfo?.listPrice && (
             <View style={[styles.priceTag, { backgroundColor: isDark ? '#1a3320' : '#e8f5e9' }]}>
               <Text style={styles.price}>
-                {book.saleInfo.listPrice.amount} {book.saleInfo.listPrice.currencyCode}
+                {book.saleInfo.listPrice.currencyCode === 'INR' ? '₹' : book.saleInfo.listPrice.currencyCode} {book.saleInfo.listPrice.amount}
               </Text>
             </View>
+          )}
+
+          {/* Add a button to open the book's preview link */}
+          {book.volumeInfo.previewLink && (
+            <TouchableOpacity
+              style={[styles.viewMoreButton, { backgroundColor: theme.primary }]}
+              onPress={() => Linking.openURL(book.volumeInfo.previewLink || '')}
+            >
+              <Ionicons name="book-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.viewMoreButtonText}>View on Google Books</Text>
+            </TouchableOpacity>
           )}
         </ScrollView>
       </View>
@@ -257,13 +298,26 @@ export default function Books() {
                   <Text style={[styles.bookAuthor, { color: theme.secondaryText }]} numberOfLines={1}>
                     {item.volumeInfo.authors?.join(", ") || "Unknown Author"}
                   </Text>
-                  {item.volumeInfo.averageRating && (
-                    <View style={[styles.bookRatingContainer, { backgroundColor: isDark ? '#3d2e00' : '#fff8e1' }]}>
-                      <Text style={styles.bookRating}>
-                        ★ {item.volumeInfo.averageRating.toFixed(1)}
-                      </Text>
-                    </View>
-                  )}
+                  <View style={styles.bookFooter}>
+                    {item.volumeInfo.averageRating && (
+                      <View style={[styles.bookRatingContainer, { backgroundColor: isDark ? '#3d2e00' : '#fff8e1' }]}>
+                        <Text style={styles.bookRating}>
+                          ★ {item.volumeInfo.averageRating.toFixed(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {item.volumeInfo.previewLink && (
+                      <TouchableOpacity
+                        style={styles.bookLinkButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          Linking.openURL(item.volumeInfo.previewLink || '');
+                        }}
+                      >
+                        <Text style={[styles.bookLinkText, { color: theme.primary }]}>View</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               </TouchableOpacity>
             )}
@@ -292,6 +346,7 @@ export default function Books() {
   );
 }
 
+// Add these styles at the end of the StyleSheet
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -550,5 +605,27 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     color: "#4caf50",
+  },
+  viewMoreButton: {
+    marginTop: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 30,
+    alignSelf: 'center',
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 'auto',
+  },
+  viewMoreButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    letterSpacing: 0.5,
   },
 });
