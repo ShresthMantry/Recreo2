@@ -47,6 +47,7 @@ export default function Users() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [processingUserId, setProcessingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.role !== 'admin') {
@@ -141,6 +142,7 @@ export default function Users() {
 
   const toggleUserRole = async (userId: string, currentRole: string) => {
     try {
+      setProcessingUserId(userId);
       const newRole = currentRole === 'admin' ? 'user' : 'admin';
       
       // First try the admin API
@@ -183,6 +185,8 @@ export default function Users() {
     } catch (error) {
       console.error('Error updating user role:', error);
       Alert.alert('Error', 'Failed to update user role');
+    } finally {
+      setProcessingUserId(null);
     }
   };
 
@@ -197,6 +201,7 @@ export default function Users() {
           style: 'destructive',
           onPress: async () => {
             try {
+              setProcessingUserId(userId);
               // Try admin API first
               try {
                 const { error } = await supabase.auth.admin.deleteUser(userId);
@@ -229,6 +234,8 @@ export default function Users() {
             } catch (error) {
               console.error('Error deleting user:', error);
               Alert.alert('Error', 'Failed to delete user');
+            } finally {
+              setProcessingUserId(null);
             }
           }
         }
@@ -258,8 +265,12 @@ export default function Users() {
         end={{ x: 1, y: 0 }}
         style={styles.header}
       >
-        <Text style={[styles.headerTitle, { color: theme.cardBackground }]}>User Management</Text>
-        <Text style={[styles.headerSubtitle, { color: theme.cardBackground + 'CC' }]}>Manage your application users</Text>
+        <View style={styles.headerContent}>
+          <Text style={[styles.headerTitle, { color: theme.cardBackground }]}>User Management</Text>
+          <Text style={[styles.headerSubtitle, { color: theme.cardBackground + 'CC' }]}>
+            {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'} in your application
+          </Text>
+        </View>
       </LinearGradient>
       
       <View style={styles.contentContainer}>
@@ -288,7 +299,12 @@ export default function Users() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="people" size={60} color={theme.secondaryText} style={styles.emptyIcon} />
+              <Ionicons 
+                name={searchQuery ? "search-outline" : "people-outline"} 
+                size={70} 
+                color={theme.secondaryText} 
+                style={styles.emptyIcon} 
+              />
               <Text style={[styles.emptyText, { color: theme.secondaryText }]}>
                 {searchQuery ? "No users match your search" : "No users found"}
               </Text>
@@ -304,7 +320,7 @@ export default function Users() {
             <View style={[styles.userCard, { backgroundColor: theme.cardBackground }]}>
               <View style={styles.userAvatarContainer}>
                 <LinearGradient
-                  colors={item.role === 'admin' ? [theme.primary, theme.secondary] : [theme.surface, theme.surfaceHover]}
+                  colors={item.role === 'admin' ? [theme.primary, theme.secondary] : [isDark ? theme.surface : '#E0E0E0', isDark ? theme.surfaceHover : '#BDBDBD']}
                   style={styles.userAvatar}
                 >
                   <Text style={styles.userInitial}>
@@ -321,42 +337,52 @@ export default function Users() {
                   {item.email}
                 </Text>
                 
-                <View style={styles.roleContainer}>
-                  <View style={[
-                    styles.roleBadge, 
-                    { 
-                      backgroundColor: item.role === 'admin' 
-                        ? `${theme.primary}30` // 30% opacity
-                        : `${theme.secondaryText}20` // 20% opacity
-                    }
-                  ]}>
+                <View style={styles.userActions}>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      {
+                        backgroundColor: item.role === 'admin' 
+                          ? `${theme.primary}20` 
+                          : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'
+                      }
+                    ]}
+                    onPress={() => toggleUserRole(item.id, item.role)}
+                    disabled={processingUserId === item.id}
+                  >
                     <Text style={[
-                      styles.roleText, 
-                      { 
-                        color: item.role === 'admin' 
-                          ? theme.primary 
-                          : theme.secondaryText 
+                      styles.roleButtonText,
+                      {
+                        color: item.role === 'admin' ? theme.primary : isDark ? theme.secondaryText : '#555555'
                       }
                     ]}>
-                      {item.role+" "}
+                      {item.role === 'admin' ? 'ADMIN' : 'USER'}
                     </Text>
-                  </View>
+                    <Ionicons 
+                      name={item.role === 'admin' ? 'shield' : 'person'} 
+                      size={14} 
+                      color={item.role === 'admin' ? theme.primary : isDark ? theme.secondaryText : '#555555'} 
+                      style={styles.roleIcon}
+                    />
+                  </TouchableOpacity>
                   
-                  {/* Admin role management buttons removed */}
+                  {processingUserId === item.id ? (
+                    <ActivityIndicator size="small" color={theme.primary} style={styles.actionIndicator} />
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => deleteUser(item.id)}
+                    >
+                      <LinearGradient
+                        colors={['#FF5252', '#FF1744']}
+                        style={styles.deleteButtonGradient}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
-              
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => deleteUser(item.id)}
-              >
-                <LinearGradient
-                  colors={['#FF5252', '#FF1744']}
-                  style={styles.deleteButtonGradient}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-                </LinearGradient>
-              </TouchableOpacity>
             </View>
           )}
         />
@@ -377,6 +403,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   header: {
     paddingVertical: 24,
@@ -388,6 +415,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
+  },
+  headerContent: {
+    alignItems: 'flex-start',
   },
   headerTitle: {
     fontSize: 28,
@@ -494,38 +524,35 @@ const styles = StyleSheet.create({
   },
   userEmail: {
     fontSize: 14,
-    marginBottom: 8,
+    marginBottom: 12,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
-  roleContainer: {
+  userActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  roleBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 10,
-  },
-  roleText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
-  },
-  actionButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  roleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
   },
-  actionButtonText: {
+  roleButtonText: {
     fontSize: 12,
     fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
+  },
+  roleIcon: {
+    marginLeft: 4,
+  },
+  actionIndicator: {
+    marginLeft: 'auto',
+    marginRight: 8,
   },
   deleteButton: {
-    alignSelf: 'center',
-    marginLeft: 8,
+    marginLeft: 'auto',
   },
   deleteButtonGradient: {
     width: 36,
