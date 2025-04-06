@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Share,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useAuth } from "../../context/AuthContext";
@@ -192,6 +193,35 @@ export default function CommunitySharing() {
     } catch (error) {
       console.error("Upload image error:", error);
       throw new Error(`Failed to upload image: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  // Add the sharePost function
+  const sharePost = async (post: Post) => {
+    try {
+      let shareContent = {
+        message: `${post.username} shared: ${post.content}`,
+        url: post.image_url || undefined
+      };
+      
+      // Provide haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      const result = await Share.share(shareContent);
+      
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          // Shared with activity type of result.activityType
+          showSuccessMessage("Post shared successfully");
+        } else {
+          // Shared
+          showSuccessMessage("Post shared successfully");
+        }
+      } else if (result.action === Share.dismissedAction) {
+        // Dismissed
+      }
+    } catch (error) {
+      handleError(error);
     }
   };
 
@@ -1222,8 +1252,8 @@ export default function CommunitySharing() {
                         styles.actionButton, 
                         { 
                           backgroundColor: likedPosts[item.id] 
-                            ? 'rgba(255, 75, 75, 0.1)' 
-                            : theme.surfaceHover 
+                            ? 'rgba(255, 75, 75, 0.08)' 
+                            : 'transparent' 
                         }
                       ]}
                       activeOpacity={0.7}
@@ -1255,12 +1285,24 @@ export default function CommunitySharing() {
                         setViewMode("comments");
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       }}
-                      style={[styles.actionButton, { backgroundColor: theme.surfaceHover }]}
+                      style={[styles.actionButton, { backgroundColor: 'transparent' }]}
                       activeOpacity={0.7}
                     >
                       <Ionicons name="chatbubble-outline" size={22} color={theme.primary} />
                       <Text style={[styles.actionButtonText, { color: theme.primary }]}>
                         Comments
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    {/* Share button - Improved UI */}
+                    <TouchableOpacity
+                      onPress={() => sharePost(item)}
+                      style={[styles.actionButton, { backgroundColor: 'transparent' }]}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="arrow-redo-outline" size={22} color={theme.primary} />
+                      <Text style={[styles.actionButtonText, { color: theme.primary }]}>
+                        Share
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1603,8 +1645,9 @@ const styles = StyleSheet.create({
   },
   postActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
+    justifyContent: 'space-around',
+    padding: 8,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.1)',
   },
@@ -1613,14 +1656,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     borderRadius: 20,
     justifyContent: 'center',
   },
   
   actionButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
+    marginLeft: 6,
+    fontSize: 15,
     fontWeight: '500',
   },
   postButton: {
