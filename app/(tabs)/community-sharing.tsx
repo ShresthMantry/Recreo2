@@ -108,7 +108,8 @@ export default function CommunitySharing() {
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "content" | "username">("all");
+    // Update the filter type state to include "liked"
+    const [filterType, setFilterType] = useState<"all" | "content" | "username" | "liked">("all");
   const [showFilterOptions, setShowFilterOptions] = useState(false);
   
   // New state for create post modal
@@ -805,25 +806,36 @@ export default function CommunitySharing() {
     return format(new Date(dateString), "MMM d, h:mm a");
   };
 
-  // Filter posts based on search query and filter type
-  const filteredPosts = posts.filter(post => {
-    if (!searchQuery.trim()) return true;
-    
-    const query = searchQuery.toLowerCase();
-    
-    switch (filterType) {
-      case "content":
-        return post.content.toLowerCase().includes(query);
-      case "username":
-        return post.username.toLowerCase().includes(query);
-      case "all":
-      default:
-        return (
-          post.content.toLowerCase().includes(query) ||
-          post.username.toLowerCase().includes(query)
-        );
-    }
-  });
+    // Filter posts based on search query and filter type
+    const filteredPosts = posts.filter(post => {
+      // First apply the likes filter if selected
+      if (filterType === "liked" && !likedPosts[post.id]) {
+        return false;
+      }
+      
+      if (!searchQuery.trim()) return true;
+      
+      const query = searchQuery.toLowerCase();
+      
+      switch (filterType) {
+        case "content":
+          return post.content.toLowerCase().includes(query);
+        case "username":
+          return post.username.toLowerCase().includes(query);
+        case "liked":
+          // For liked posts with search, we still want to filter by content/username
+          return (
+            post.content.toLowerCase().includes(query) ||
+            post.username.toLowerCase().includes(query)
+          );
+        case "all":
+        default:
+          return (
+            post.content.toLowerCase().includes(query) ||
+            post.username.toLowerCase().includes(query)
+          );
+      }
+    });
 
   // Toggle filter options visibility
   const toggleFilterOptions = () => {
@@ -831,8 +843,8 @@ export default function CommunitySharing() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // Set filter type and hide options
-  const setFilter = (type: "all" | "content" | "username") => {
+   // Set filter type and hide options
+   const setFilter = (type: "all" | "content" | "username" | "liked") => {
     setFilterType(type);
     setShowFilterOptions(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1129,8 +1141,8 @@ export default function CommunitySharing() {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Filter options */}
-          {showFilterOptions && (
+                    {/* Filter options */}
+                    {showFilterOptions && (
             <View style={[styles.filterOptions, { backgroundColor: theme.cardBackground }]}>
               <TouchableOpacity 
                 style={[
@@ -1165,6 +1177,21 @@ export default function CommunitySharing() {
               >
                 <Text style={[styles.filterOptionText, { color: theme.text }]}>Username</Text>
                 {filterType === "username" && (
+                  <Ionicons name="checkmark" size={18} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+              {/* New Liked Posts filter option */}
+              <TouchableOpacity 
+                style={[
+                  styles.filterOption, 
+                  filterType === "liked" && { backgroundColor: theme.surfaceHover }
+                ]}
+                onPress={() => setFilter("liked")}
+              >
+                <View style={styles.filterOptionContent}>
+                  <Text style={[styles.filterOptionText, { color: theme.text }]}>Liked Posts</Text>
+                </View>
+                {filterType === "liked" && (
                   <Ionicons name="checkmark" size={18} color={theme.primary} />
                 )}
               </TouchableOpacity>
@@ -1963,5 +1990,9 @@ const styles = StyleSheet.create({
   successMessage: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  filterOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
