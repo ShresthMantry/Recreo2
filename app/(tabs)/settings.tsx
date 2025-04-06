@@ -25,7 +25,8 @@ const activitiesList = [
   "Journal",
   "Community Sharing",
   "Games",
-  "Yoga"
+  "Yoga",
+  "News"
 ];
 
 export default function Settings() {
