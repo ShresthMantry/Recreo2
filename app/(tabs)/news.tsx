@@ -192,55 +192,59 @@ export default function News() {
         </View>
       )}
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoriesContainer}
-      >
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category.id}
-            style={[
-              styles.categoryButton,
-              {
-                backgroundColor:
-                  selectedCategory === category.id
-                    ? theme.primary
-                    : isDark
-                    ? '#1a1a1a'
-                    : '#f5f5f5',
-              },
-            ]}
-            onPress={() => {
-              setSelectedCategory(category.id);
-              Haptics.selectionAsync();
-            }}
-          >
-            <Ionicons
-              name={category.icon as any}
-              size={20}
-              color={
-                selectedCategory === category.id
-                  ? '#fff'
-                  : theme.secondaryText
-              }
-            />
-            <Text
+      {/* Fixed height container for categories */}
+      <View style={styles.categoriesWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoriesContainer}
+          contentContainerStyle={styles.categoriesContentContainer}
+        >
+          {categories.map((category) => (
+            <TouchableOpacity
+              key={category.id}
               style={[
-                styles.categoryText,
+                styles.categoryButton,
                 {
-                  color:
+                  backgroundColor:
                     selectedCategory === category.id
-                      ? '#fff'
-                      : theme.secondaryText,
+                      ? theme.primary
+                      : isDark
+                      ? '#1a1a1a'
+                      : '#f5f5f5',
                 },
               ]}
+              onPress={() => {
+                setSelectedCategory(category.id);
+                Haptics.selectionAsync();
+              }}
             >
-              {category.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+              <Ionicons
+                name={category.icon as any}
+                size={20}
+                color={
+                  selectedCategory === category.id
+                    ? '#fff'
+                    : theme.secondaryText
+                }
+              />
+              <Text
+                style={[
+                  styles.categoryText,
+                  {
+                    color:
+                      selectedCategory === category.id
+                        ? '#fff'
+                        : theme.secondaryText,
+                  },
+                ]}
+              >
+                {category.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       {loading ? (
         <ActivityIndicator
@@ -297,9 +301,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     padding: 8,
   },
+  categoriesWrapper: {
+    height: 60, // Fixed height for the categories section
+    marginBottom: 10,
+  },
   categoriesContainer: {
     paddingHorizontal: 15,
-    marginBottom: 10,
+  },
+  categoriesContentContainer: {
+    height: 50, // Fixed height for the content
+    alignItems: 'center',
   },
   categoryButton: {
     flexDirection: 'row',
@@ -308,6 +319,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     marginHorizontal: 5,
+    height: 40, // Fixed height for each button
   },
   categoryText: {
     marginLeft: 6,
