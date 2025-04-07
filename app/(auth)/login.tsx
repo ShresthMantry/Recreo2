@@ -156,7 +156,7 @@ export default function Login() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
+      <StatusBar barStyle={theme.text === '#FFFFFF' ? "light-content" : "dark-content"} />
         
         {/* Add the loader component */}
         <Loader 
@@ -181,7 +181,10 @@ export default function Login() {
             {!isKeyboardVisible && (
               <View style={styles.logoContainer}>
                 <Image 
-                  source={require('../../assets/images/icon.png')} 
+                  source={theme.text === "#FFFFFF" 
+                    ? require('../../assets/images/icon-dark.png')
+                    : require('../../assets/images/icon-light.png')
+                  }
                   style={styles.logo} 
                   resizeMode="contain"
                 />
