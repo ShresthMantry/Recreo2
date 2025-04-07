@@ -884,6 +884,8 @@ const panResponder = PanResponder.create({
 const styles = StyleSheet.create({
     container: {
       flex: 1,
+      paddingBottom: require('react-native').Platform.OS === 'android' ? 80 : 0,
+    paddingTop: require('react-native').Platform.OS === 'android' ? 30 : 0,
     },
     header: {
       flexDirection: 'row',

@@ -1453,6 +1453,7 @@ export default function CommunitySharing() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingBottom: require('react-native').Platform.OS === 'android' ? 80 : 0,
   },
   header: {
     padding: 16,
