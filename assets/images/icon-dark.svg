@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Dark theme background -->
+  <rect width="200" height="200" fill="#121212" rx="40" ry="40"/>
+  
+  <!-- Main circle -->
+  <circle cx="100" cy="100" r="70" fill="none" stroke="#4CC9F0" stroke-width="10"/>
+  
+  <!-- Activity dots - simplified -->
+  <circle cx="100" cy="30" r="14" fill="#4CC9F0"/>
+  <circle cx="157" cy="65" r="14" fill="#4CC9F0"/>
+  <circle cx="157" cy="135" r="14" fill="#4CC9F0"/>
+  <circle cx="100" cy="170" r="14" fill="#4CC9F0"/>
+  <circle cx="43" cy="135" r="14" fill="#4CC9F0"/>
+  <circle cx="43" cy="65" r="14" fill="#4CC9F0"/>
+  
+  <!-- Center circle -->
+  <circle cx="100" cy="100" r="25" fill="#4CC9F0"/>
+  
+  <!-- Simple "R" in center -->
+  <text x="100" y="108" font-family="Arial" font-size="24" font-weight="bold" text-anchor="middle" fill="#121212">R</text>
+</svg>

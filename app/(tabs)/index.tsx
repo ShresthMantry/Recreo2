@@ -16,22 +16,22 @@ import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { format } from "date-fns";
+import { format, differenceInCalendarDays } from "date-fns";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from 'expo-haptics';
 import Loader from "../../components/Loader";
-
-// Mock data for recent activities - replace with actual data in production
-const mockRecentActivities = [
-  { id: '1', type: 'journal', title: 'Journal Entry', date: new Date(Date.now() - 86400000), icon: 'journal' },
-  { id: '2', type: 'games', title: 'Played Tic-Tac-Toe', date: new Date(Date.now() - 172800000), icon: 'game-controller' },
-  { id: '3', type: 'community-sharing', title: 'Posted in Community', date: new Date(Date.now() - 259200000), icon: 'people' },
-];
+import { supabase } from "../../lib/supabase";
 
 interface QuoteData {
   quote: string;
   author: string;
   category: string;
+}
+
+interface StreakData {
+  currentStreak: number;
+  longestStreak: number;
+  lastCheckIn: Date;
 }
 
 export default function Home() {
@@ -40,7 +40,11 @@ export default function Home() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [greeting, setGreeting] = useState('');
-  const [recentActivities, setRecentActivities] = useState(mockRecentActivities);
+  const [streakData, setStreakData] = useState<StreakData>({
+    currentStreak: 0,
+    longestStreak: 0,
+    lastCheckIn: new Date()
+  });
   const [quote, setQuote] = useState<QuoteData>({ 
     quote: "The only way to do great work is to love what you do.", 
     author: "Steve Jobs",
@@ -52,6 +56,7 @@ export default function Home() {
   const translateY = useRef(new Animated.Value(20)).current;
   const quoteScale = useRef(new Animated.Value(0.95)).current;
   const actionButtonScale = useRef(new Animated.Value(0.9)).current;
+  const streakScale = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
     // Set greeting based on time of day
@@ -63,6 +68,11 @@ export default function Home() {
     // Fetch quote with daily caching
     fetchDailyQuote();
     
+    // Check and update user streak
+    if (user?.email) {
+      checkAndUpdateStreak();
+    }
+    
     // Simulate loading data
     const timer = setTimeout(() => {
       setIsLoading(false);
@@ -71,7 +81,7 @@ export default function Home() {
     }, 1000);
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [user]);
 
   const startAnimations = () => {
     // Fade in and slide up animation
@@ -97,8 +107,104 @@ export default function Home() {
         friction: 8,
         tension: 40,
         useNativeDriver: true,
+      }),
+      Animated.spring(streakScale, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
       })
     ]).start();
+  };
+
+  const checkAndUpdateStreak = async () => {
+    if (!user?.email) return;
+    
+    try {
+      // First, check if user has a streak record
+      const { data, error } = await supabase
+        .from('user_streaks')
+        .select('*')
+        .eq('user_id', user.email)
+        .single();
+      
+      const today = new Date();
+      
+      if (error || !data) {
+        // No streak record found, create a new one
+        const { data: newStreak, error: createError } = await supabase
+          .from('user_streaks')
+          .insert([
+            { 
+              user_id: user.email,
+              current_streak: 1,
+              longest_streak: 1,
+              last_check_in: today
+            }
+          ])
+          .select()
+          .single();
+          
+        if (!createError && newStreak) {
+          setStreakData({
+            currentStreak: 1,
+            longestStreak: 1,
+            lastCheckIn: new Date(newStreak.last_check_in)
+          });
+        }
+      } else {
+        // Streak record found, check if it needs to be updated
+        const lastCheckIn = new Date(data.last_check_in);
+        const daysSinceLastCheckIn = differenceInCalendarDays(today, lastCheckIn);
+        
+        let newCurrentStreak = data.current_streak;
+        let newLongestStreak = data.longest_streak;
+        
+        if (daysSinceLastCheckIn === 0) {
+          // Already checked in today, just load the data
+          setStreakData({
+            currentStreak: data.current_streak,
+            longestStreak: data.longest_streak,
+            lastCheckIn: lastCheckIn
+          });
+          return;
+        } else if (daysSinceLastCheckIn === 1) {
+          // Consecutive day, increment streak
+          newCurrentStreak += 1;
+          if (newCurrentStreak > newLongestStreak) {
+            newLongestStreak = newCurrentStreak;
+          }
+        } else if (daysSinceLastCheckIn > 1) {
+          // Streak broken, reset to 1
+          newCurrentStreak = 1;
+        }
+        
+        // Update the streak in the database
+        const { error: updateError } = await supabase
+          .from('user_streaks')
+          .update({ 
+            current_streak: newCurrentStreak,
+            longest_streak: newLongestStreak,
+            last_check_in: today
+          })
+          .eq('user_id', user.email);
+          
+        if (!updateError) {
+          setStreakData({
+            currentStreak: newCurrentStreak,
+            longestStreak: newLongestStreak,
+            lastCheckIn: today
+          });
+          
+          // If streak increased, give haptic feedback
+          if (newCurrentStreak > data.current_streak) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating streak:', error);
+    }
   };
 
   const fetchDailyQuote = async () => {
@@ -170,6 +276,34 @@ export default function Home() {
       case 'books': return ['#795548', '#5D4037'];
       default: return ['#607D8B', '#455A64'];
     }
+  };
+
+  // Generate array of days for streak display
+  const generateStreakDays = () => {
+    const days = [];
+    const daysOfWeek = 7;
+    
+    // Get the current day of the week (0 = Sunday, 6 = Saturday)
+    const today = new Date();
+    const currentDayOfWeek = today.getDay();
+    
+    // Calculate how many days in the current streak fall within this week
+    const daysInThisWeek = Math.min(streakData.currentStreak, currentDayOfWeek + 1);
+    
+    // Generate the days for the week
+    for (let i = 0; i < daysOfWeek; i++) {
+      // A day is active if it's before or equal to today AND within the streak
+      const isBeforeOrToday = i <= currentDayOfWeek;
+      const isWithinStreak = currentDayOfWeek - i < daysInThisWeek;
+      
+      days.push({
+        active: isBeforeOrToday && isWithinStreak,
+        current: i === currentDayOfWeek,
+        dayOfWeek: i
+      });
+    }
+    
+    return days;
   };
 
   if (isLoading) {
@@ -310,91 +444,115 @@ export default function Home() {
           </Animated.View>
         </ScrollView>
 
-        {/* Recent Activities */}
-        <View style={styles.recentActivitiesHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Activities</Text>
-          <TouchableOpacity 
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.seeAllText, { color: theme.primary }]}>See All</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Daily Streak Section */}
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Daily Streak</Text>
 
-        {recentActivities.length > 0 ? (
-          <View style={styles.recentActivitiesList}>
-            {recentActivities.map((activity, index) => (
-              <Animated.View 
-                key={activity.id}
-                style={{ 
-                  opacity: fadeAnim,
-                  transform: [{ 
-                    translateY: translateY.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, 10 * (index + 1)]
-                    }) 
-                  }]
-                }}
+        <Animated.View 
+          style={[
+            styles.streakContainer, 
+            { 
+              backgroundColor: theme.cardBackground,
+              transform: [{ scale: streakScale }]
+            }
+          ]}
+        >
+          {/* Streak Header with Count */}
+          <View style={styles.streakHeaderRow}>
+            <View style={styles.streakCountContainer}>
+              <Text style={[styles.streakCount, { color: theme.text }]}>
+                {streakData.currentStreak}
+              </Text>
+              <Text style={[styles.streakLabel, { color: theme.secondaryText }]}>
+                {streakData.currentStreak === 1 ? 'Day' : 'Days'}
+              </Text>
+            </View>
+            <View style={styles.streakBadge}>
+              <LinearGradient
+                colors={['#FFD54F', '#FFA000']}
+                style={styles.streakBadgeGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
               >
-                <TouchableOpacity 
-                  style={[styles.activityItem, { backgroundColor: theme.cardBackground }]}
-                  onPress={() => navigateToActivity(activity.type)}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={getActivityColor(activity.type) as [string, string]}
-                    style={styles.activityIconContainer}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  >
-                    <Ionicons 
-                      name={
-                        activity.type === 'journal' ? 'journal' :
-                        activity.type === 'games' ? 'game-controller' :
-                        activity.type === 'community-sharing' ? 'people' :
-                        activity.type === 'music' ? 'musical-notes' :
-                        activity.type === 'drawing' ? 'brush' :
-                        activity.type === 'books' ? 'book' : 'apps'
-                      } 
-                      size={20} 
-                      color="#FFFFFF" 
-                    />
-                  </LinearGradient>
-                  <View style={styles.activityDetails}>
-                    <Text style={[styles.activityTitle, { color: theme.text }]}>{activity.title}</Text>
-                    <Text style={[styles.activityDate, { color: theme.secondaryText }]}>
-                      {format(activity.date, 'MMM d, yyyy')}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
-                </TouchableOpacity>
-              </Animated.View>
-            ))}
+                <Ionicons name="flame" size={24} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={[styles.streakBadgeText, { color: theme.secondaryText }]}>
+                {streakData.currentStreak > 0 ? 'Active' : 'Start today!'}
+              </Text>
+            </View>
           </View>
-        ) : (
-          <Animated.View 
-            style={[
-              styles.emptyState, 
-              { 
-                backgroundColor: theme.cardBackground,
-                opacity: fadeAnim,
-                transform: [{ scale: quoteScale }]
-              }
-            ]}
-          >
-            <Ionicons name="calendar-outline" size={40} color={theme.secondaryText} />
-            <Text style={[styles.emptyStateText, { color: theme.secondaryText }]}>
-              No recent activities yet
-            </Text>
-            <TouchableOpacity 
-              style={[styles.startButton, { backgroundColor: theme.primary }]}
-              onPress={() => navigateToActivity(user?.activities?.[0] || 'journal')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.startButtonText}>Start an Activity</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
+
+          {/* Weekly Calendar */}
+          <View style={styles.weekCalendarContainer}>
+            <View style={styles.weekDaysHeader}>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                <Text key={index} style={[styles.weekDayLabel, { color: theme.secondaryText }]}>
+                  {day}
+                </Text>
+              ))}
+            </View>
+            
+            <View style={styles.weekDaysRow}>
+              {generateStreakDays().map((day, index) => (
+                <View key={index} style={styles.weekDayItem}>
+                  <View 
+                    style={[
+                      styles.weekDayCircle,
+                      { 
+                        backgroundColor: day.active 
+                          ? day.current 
+                            ? '#FFA000' 
+                            : theme.primary 
+                          : isDark ? '#424242' : '#E0E0E0'
+                      }
+                    ]}
+                  >
+                    {day.active && (
+                      <Ionicons 
+                        name={day.current ? "flame" : "checkmark"} 
+                        size={18} 
+                        color="#FFFFFF" 
+                      />
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Streak Stats */}
+          <View style={styles.streakStatsRow}>
+            <View style={styles.streakStatItem}>
+              <Text style={[styles.streakStatValue, { color: theme.text }]}>
+                {streakData.longestStreak}
+              </Text>
+              <Text style={[styles.streakStatLabel, { color: theme.secondaryText }]}>
+                Best Streak
+              </Text>
+            </View>
+            
+            <View style={[styles.streakStatDivider, { backgroundColor: isDark ? '#424242' : '#E0E0E0' }]} />
+            
+            <View style={styles.streakStatItem}>
+              <Text style={[styles.streakStatValue, { color: theme.text }]}>
+                {format(streakData.lastCheckIn, 'MMM d')}
+              </Text>
+              <Text style={[styles.streakStatLabel, { color: theme.secondaryText }]}>
+                Last Check-in
+              </Text>
+            </View>
+          </View>
+          
+          {/* Motivational Message */}
+          <Text style={[styles.streakMessage, { color: theme.secondaryText }]}>
+            {streakData.currentStreak === 0 
+              ? "Start your streak today!" 
+              : streakData.currentStreak === 1 
+                ? "You've started your streak! Come back tomorrow to keep it going."
+                : streakData.currentStreak >= 7
+                  ? "Amazing! You're on a roll with your daily practice!"
+                  : `You're on a ${streakData.currentStreak}-day streak! Keep it up!`}
+          </Text>
+        </Animated.View>
 
         {/* Suggested for You */}
         <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>Suggested for You</Text>
@@ -441,13 +599,13 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingBottom: Platform.OS === 'android' ? 80 : 0, // Fixed Platform import
+    paddingBottom: Platform.OS === 'android' ? 80 : 0,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingBottom: Platform.OS === 'android' ? 80 : 0, // Fixed Platform import
+    paddingBottom: Platform.OS === 'android' ? 80 : 0,
   },
   header: {
     flexDirection: 'row',
@@ -644,5 +802,114 @@ const styles = StyleSheet.create({
   suggestedButtonText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  // Updated streak styles
+  streakContainer: {
+    marginHorizontal: 24,
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 24,
+  },
+  streakHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  streakCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  streakCount: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    marginRight: 8,
+  },
+  streakLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  streakBadge: {
+    alignItems: 'center',
+  },
+  streakBadgeGradient: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  streakBadgeText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  weekCalendarContainer: {
+    marginVertical: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  weekDaysHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  weekDayLabel: {
+    width: 32,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  weekDaysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 8,
+  },
+  weekDayItem: {
+    alignItems: 'center',
+  },
+  weekDayCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  streakStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  streakStatItem: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  streakStatValue: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  streakStatLabel: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  streakStatDivider: {
+    width: 1,
+    height: 30,
+    opacity: 0.5,
+  },
+  streakMessage: {
+    textAlign: 'center',
+    fontSize: 14,
+    marginTop: 16,
+    fontStyle: 'italic',
   },
 });

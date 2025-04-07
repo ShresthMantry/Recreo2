@@ -12,7 +12,8 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
-  ScrollView
+  ScrollView,
+  Image  // Add this import
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "expo-router";
@@ -32,7 +33,7 @@ export default function Register() {
   const [isLoading, setIsLoading] = useState(false); // Add loading state
   const { register } = useAuth();
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -175,6 +176,19 @@ export default function Register() {
                 }
               ]}
             >
+              {/* Add the logo container and app name here */}
+              <View style={styles.logoContainer}>
+                <Image 
+                  source={theme.text === "#FFFFFF" 
+                    ? require('../../assets/images/icon-dark.png')
+                    : require('../../assets/images/icon-light.png')
+                  }
+                  style={styles.logo} 
+                  resizeMode="contain"
+                />
+                <Text style={[styles.appName, { color: theme.primary }]}>RECREO</Text>
+              </View>
+              
               <View style={styles.headerContainer}>
                 <Text style={[styles.title, { color: theme.text }]}>Create Account</Text>
                 <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
@@ -468,5 +482,20 @@ const styles = StyleSheet.create({
   loginLink: {
     fontSize: 15,
     fontWeight: "600",
+  },
+  // Add these new styles for the logo and app name
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    marginBottom: 12,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: 1.5,
   },
 });
