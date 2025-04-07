@@ -581,7 +581,8 @@ export default function YogaScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 20,
+    paddingBottom: require('react-native').Platform.OS === 'android' ? 80 : 0,
+    paddingTop: require('react-native').Platform.OS === 'android' ? 40 : 20,
   },
   header: {
     paddingHorizontal: 20,

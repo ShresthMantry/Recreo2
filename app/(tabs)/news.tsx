@@ -275,6 +275,9 @@ export default function News() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
+    paddingBottom: Platform.OS === 'android' ? 80 : 0,
+    paddingTop: Platform.OS === 'android' ? 30 : 0,
   },
   header: {
     flexDirection: 'row',

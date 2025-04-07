@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Animated
 } from "react-native";
+import { Platform } from 'react-native';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -196,7 +197,9 @@ export default function Home() {
           { opacity: fadeAnim, transform: [{ translateY }] }
         ]}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ 
+          paddingBottom: Platform.OS === 'android' ? 70 : 20 
+        }}
       >
         {/* Header Section */}
         <View style={styles.header}>
@@ -438,11 +441,13 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingBottom: Platform.OS === 'android' ? 80 : 0, // Fixed Platform import
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingBottom: Platform.OS === 'android' ? 80 : 0, // Fixed Platform import
   },
   header: {
     flexDirection: 'row',

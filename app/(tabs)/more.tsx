@@ -257,7 +257,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    paddingBottom: 0, // Remove bottom padding from container
+    paddingBottom: require('react-native').Platform.OS === 'android' ? 80 : 0, // Add padding for Android only
+    paddingTop: require('react-native').Platform.OS === 'android' ? 50 : 0, // Add padding for Android only
   },
   headerContainer: {
     marginBottom: 24,

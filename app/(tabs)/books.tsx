@@ -351,9 +351,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  container: { 
-    flex: 1, 
-    padding: 16,
+  container: {
+    flex: 1,
+    paddingBottom: require('react-native').Platform.OS === 'android' ? 80 : 0,
+    paddingTop: require('react-native').Platform.OS === 'android' ? 40 : 0,
   },
   title: { 
     fontSize: 32, 
