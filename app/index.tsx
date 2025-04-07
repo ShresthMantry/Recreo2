@@ -1,27 +1,47 @@
-import React, { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
-import { useAuth } from "../context/AuthContext"; // Assuming you have an AuthContext
+import React, { useEffect } from 'react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { Redirect, useRouter } from 'expo-router';
+import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function Index() {
-  const { user } = useAuth(); // Replace with your actual authentication logic
+  const { user, isLoading } = useAuth();
   const router = useRouter();
-  const [isMounted, setIsMounted] = useState(false);
+  const { theme } = useTheme();
 
   useEffect(() => {
-    setIsMounted(true); // Ensure the component is mounted before navigating
-  }, []);
-
-  useEffect(() => {
-    if (isMounted && !user) {
-      router.replace("/(auth)/login"); // Redirect to login if not logged in
+    if (!isLoading) {
+      if (user) {
+        // User is logged in, check if they have selected activities
+        if (user.activities && user.activities.length > 0) {
+          router.replace('/(tabs)');
+        } else {
+          router.replace('/(auth)/select-activities');
+        }
+      } else {
+        // User is not logged in
+        router.replace('/(auth)/login');
+      }
     }
-  }, [isMounted, user, router]);
+  }, [isLoading, user, router]);
 
-  if (!isMounted || !user) {
-    return null; // Render nothing while redirecting or before mounting
+  // Show loading indicator while checking authentication state
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
   }
 
-  return (
-    <>"hello"</> // Render your default content here if needed
-  );
+  // This will not be rendered as the useEffect will redirect
+  return null;
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
