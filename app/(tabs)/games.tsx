@@ -121,7 +121,8 @@ const GameButton: React.FC<GameButtonProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? 30 : 0, // Add padding for Android notch
+    paddingTop: Platform.OS === 'android' ? 30 : 0,
+    paddingBottom: Platform.OS === 'android' ? 80 : 0, // Add padding for Android only
   },
   menuContainer: {
     flex: 1,

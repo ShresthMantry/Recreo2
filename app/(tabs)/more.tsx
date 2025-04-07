@@ -27,7 +27,8 @@ const allActivities = [
   { name: "Journal", icon: "journal" },
   { name: "Community-Sharing", icon: "people" },
   { name: "Games", icon: "game-controller" },
-  { name: "Yoga", icon: "fitness"}
+  { name: "Yoga", icon: "fitness"},
+  {name: "News", icon: "newspaper"},
 ];
 
 export default function More() {
@@ -45,10 +46,17 @@ export default function More() {
   );
 
   // Filter activities not in user's selected list
-  // Fix: properly compare activity names with selectedActivities
-  const otherActivities = allActivities.filter(
-    (activity) => !selectedActivities.includes(activity.name.replace('-', ' '))
-  );
+  // Properly normalize both arrays for comparison
+  const otherActivities = allActivities.filter((activity) => {
+    // Convert activity name to the same format as in selectedActivities
+    const normalizedName = activity.name.replace(/-/g, ' ');
+    return !selectedActivities.some(selected => 
+      selected.toLowerCase() === normalizedName.toLowerCase()
+    );
+  });
+  
+  console.log('Selected activities:', selectedActivities);
+  console.log('Other activities:', otherActivities.map(a => a.name));
 
   useEffect(() => {
     // Start animations when component mounts
@@ -95,9 +103,9 @@ export default function More() {
     // Provide haptic feedback when selecting an activity
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
-    const route = `/(tabs)/${activity.name.toLowerCase()}`;
-    if (["/(tabs)/music", "/(tabs)/drawing", "/(tabs)/books", "/(tabs)/journal", "/(tabs)/community-sharing", "/(tabs)/games", "/(tabs)/yoga"].includes(route)) {
-      router.push(route as "/(tabs)/music" | "/(tabs)/drawing" | "/(tabs)/books" | "/(tabs)/journal" | "/(tabs)/community-sharing" | "/(tabs)/games" | "/(tabs)/yoga");
+    const route = `/(tabs)/${activity.name.toLowerCase().replace(/\s+/g, "-")}`;
+    if (["/(tabs)/music", "/(tabs)/drawing", "/(tabs)/books", "/(tabs)/journal", "/(tabs)/community-sharing", "/(tabs)/games", "/(tabs)/yoga", "/(tabs)/news"].includes(route)) {
+      router.push(route as any); // Use type 'any' to handle all possible routes
     } else {
       console.error("Invalid route:", route);
     }
@@ -111,7 +119,8 @@ export default function More() {
       case 'journal': return ['#4CAF50', '#2E7D32'];
       case 'community-sharing': return ['#2196F3', '#1976D2'];
       case 'games': return ['#FF9800', '#F57C00'];
-      case 'yoga': return ['#009688', '#00796B']; // Added gradient for yoga
+      case 'yoga': return ['#009688', '#00796B']; 
+      case 'news': return ['#3F51B5', '#303F9F']; // Added gradient for news
       default: return ['#607D8B', '#455A64'];
     }
   };
@@ -214,8 +223,12 @@ export default function More() {
           data={otherActivities}
           keyExtractor={(item) => item.name}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.listContainer,
+            { paddingBottom: 100 } // Add extra padding at bottom
+          ]}
+          showsVerticalScrollIndicator={true}
+          overScrollMode="always"
         />
       ) : (
         <Animated.View 
@@ -244,6 +257,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
+    paddingBottom: require('react-native').Platform.OS === 'android' ? 80 : 0, // Add padding for Android only
+    paddingTop: require('react-native').Platform.OS === 'android' ? 50 : 0, // Add padding for Android only
   },
   headerContainer: {
     marginBottom: 24,
@@ -264,6 +279,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingBottom: 20,
+    flexGrow: 1, // Allow content to grow
   },
   activityCard: {
     marginBottom: 16,

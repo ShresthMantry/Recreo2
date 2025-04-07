@@ -334,7 +334,19 @@ export default function YouTubeMusicPlayer() {
             backgroundColor: isActive 
               ? isDark ? theme.surfaceHover : 'rgba(98, 0, 238, 0.08)' 
               : isDark ? theme.surface : '#fff',
-            borderColor: isDark ? theme.divider : 'rgba(0,0,0,0.08)'
+            borderColor: isDark ? theme.divider : 'rgba(0,0,0,0.08)',
+            // For Android in light mode, use a special style for active tracks
+            ...(Platform.OS === 'android' && !isDark && isActive 
+              ? {
+                  borderWidth: -10,
+                  borderRadius: 12,
+                  shadowColor: theme.primary,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.4,
+                  shadowRadius: 3,
+                  elevation: 4
+                } 
+              : { borderWidth: 1 })
           }
         ]}
         onPress={() => playTrack(item)}
@@ -603,6 +615,9 @@ export default function YouTubeMusicPlayer() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
+    paddingBottom: Platform.OS === 'android' ? 80 : 0, // Add padding for Android only
+    paddingTop: Platform.OS === 'android' ? 40 : 0, // Add padding for Android only
   },
   hiddenPlayer: {
     opacity: 0,

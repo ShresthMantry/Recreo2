@@ -25,7 +25,8 @@ const activitiesList = [
   "Journal",
   "Community Sharing",
   "Games",
-  "Yoga"
+  "Yoga",
+  "News"
 ];
 
 export default function Settings() {
@@ -378,6 +379,7 @@ export default function Settings() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingBottom: require('react-native').Platform.OS === 'android' ? 80 : 0,
   },
   scrollView: {
     flex: 1,
