@@ -24,6 +24,8 @@ const activitiesList = [
   { name: "Journal", icon: "journal" },
   { name: "Community Sharing", icon: "share-social" },
   { name: "Games", icon: "game-controller" },
+  { name: "Yoga", icon: "walk" },
+  { name: "News", icon: "newspaper" },
 ];
 
 export default function SelectActivities() {
