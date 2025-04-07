@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Text, Modal, Dimensions } from 'react-native';
-import { Ionicons } from "@expo/vector-icons";
+import { View, StyleSheet, Text, Modal, Dimensions, Image } from 'react-native';
 import Animated, { 
   useAnimatedStyle, 
   useSharedValue, 
@@ -9,336 +8,218 @@ import Animated, {
   withSequence,
   withDelay,
   Easing,
-  interpolateColor
+  cancelAnimation
 } from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
-interface LoaderProps {
+interface IconLoaderProps {
   visible: boolean;
   text?: string;
   type?: 'fullscreen' | 'inline' | 'overlay';
-  color?: string;
-  size?: 'small' | 'large';
-  showSpinner?: boolean;
+  size?: 'small' | 'medium' | 'large';
 }
 
-export default function Loader({
+export default function IconLoader({
   visible,
   text,
   type = 'overlay',
-  color,
-  size = 'large',
-  showSpinner = true
-}: LoaderProps) {
+  size = 'medium'
+}: IconLoaderProps) {
   const { theme, isDark } = useTheme();
   
-  // Use theme color if no color is provided
-  const loaderColor = color || theme.primary;
-  const secondaryColor = isDark ? '#6366f1' : '#4f46e5'; // Indigo shade
+  // Animation values
+  const rotation = useSharedValue(0);
+  const scale = useSharedValue(0.9);
+  const opacity = useSharedValue(0);
+  const pulseScale = useSharedValue(1);
+  const glowOpacity = useSharedValue(0);
   
-  // Animation values for dots
-  const dot1Scale = useSharedValue(0);
-  const dot2Scale = useSharedValue(0);
-  const dot3Scale = useSharedValue(0);
-  
-  // Animation values for container
-  const containerScale = useSharedValue(0.9);
-  const containerOpacity = useSharedValue(0);
-  
-  // Animation for icon and border
-  const iconRotate = useSharedValue(0);
-  const iconScale = useSharedValue(1);
-  const borderProgress = useSharedValue(0);
-  const colorProgress = useSharedValue(0);
+  // Determine icon size based on the size prop
+  const getIconSize = () => {
+    switch(size) {
+      case 'small': return 50;
+      case 'medium': return 80;
+      case 'large': return 120;
+      default: return 80;
+    }
+  };
   
   // Start animations when visible
   useEffect(() => {
     if (visible) {
-      // Container animations
-      containerScale.value = withTiming(1, { 
-        duration: 400, 
-        easing: Easing.out(Easing.back(1.5)) 
+      // Fade in and scale up
+      opacity.value = withTiming(1, { duration: 400 });
+      scale.value = withTiming(1, { 
+        duration: 600, 
+        easing: Easing.out(Easing.back(1.2)) 
       });
-      containerOpacity.value = withTiming(1, { duration: 300 });
       
-      // Dot animations - staggered wave pattern
-      const animateDot = (dotScale: Animated.SharedValue<number>, delay: number) => {
-        dotScale.value = 0;
-        dotScale.value = withDelay(
-          delay,
-          withRepeat(
-            withSequence(
-              withTiming(1, { duration: 500, easing: Easing.out(Easing.back(1.7)) }),
-              withTiming(0.3, { duration: 500, easing: Easing.in(Easing.ease) })
-            ),
-            -1,
-            true
-          )
-        );
-      };
-      
-      animateDot(dot1Scale, 0);
-      animateDot(dot2Scale, 200);
-      animateDot(dot3Scale, 400);
-      
-      // Icon animations
-      iconRotate.value = withRepeat(
+      // Continuous rotation
+      rotation.value = withRepeat(
         withTiming(360, { 
-          duration: 3000,
-          easing: Easing.linear
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease)
         }),
+        -1, // Infinite repetitions
+        false // Don't reverse
+      );
+      
+      // Pulsing effect
+      pulseScale.value = withRepeat(
+        withSequence(
+          withTiming(1.1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) })
+        ),
         -1,
         false
       );
       
-      iconScale.value = withRepeat(
+      // Glow effect
+      glowOpacity.value = withRepeat(
         withSequence(
-          withTiming(1.2, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+          withTiming(0.7, { duration: 1000 }),
+          withTiming(0.3, { duration: 1000 })
         ),
         -1,
-        true
-      );
-      
-      // Border animation
-      borderProgress.value = withRepeat(
-        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      );
-      
-      // Color animation
-      colorProgress.value = withRepeat(
-        withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
+        false
       );
     } else {
-      // Hide animations
-      containerOpacity.value = withTiming(0, { duration: 200 });
-      containerScale.value = withTiming(0.9, { duration: 200 });
+      // Fade out and scale down
+      opacity.value = withTiming(0, { duration: 300 });
+      scale.value = withTiming(0.9, { duration: 300 });
+      
+      // Cancel animations
+      cancelAnimation(rotation);
+      cancelAnimation(pulseScale);
+      cancelAnimation(glowOpacity);
     }
+    
+    return () => {
+      // Clean up animations
+      cancelAnimation(rotation);
+      cancelAnimation(scale);
+      cancelAnimation(opacity);
+      cancelAnimation(pulseScale);
+      cancelAnimation(glowOpacity);
+    };
   }, [visible]);
   
   // Animated styles
-  const containerStyle = useAnimatedStyle(() => {
-    return {
-      opacity: containerOpacity.value,
-      transform: [{ scale: containerScale.value }],
-    };
-  });
-  
   const iconStyle = useAnimatedStyle(() => {
     return {
       transform: [
-        { rotate: `${iconRotate.value}deg` },
-        { scale: iconScale.value }
+        { rotate: `${rotation.value}deg` },
+        { scale: scale.value }
       ],
+      opacity: opacity.value
     };
   });
   
-  const borderStyle = useAnimatedStyle(() => {
-    const borderWidth = 3 + borderProgress.value * 2;
-    const borderColor = interpolateColor(
-      colorProgress.value,
-      [0, 0.5, 1],
-      [loaderColor, secondaryColor, loaderColor]
-    );
-    
+  const containerStyle = useAnimatedStyle(() => {
     return {
-      borderWidth,
-      borderColor,
-      borderRadius: 20,
-      position: 'absolute',
-      top: -borderWidth,
-      left: -borderWidth,
-      right: -borderWidth,
-      bottom: -borderWidth,
+      opacity: opacity.value,
+      transform: [{ scale: pulseScale.value }]
     };
   });
   
-  const dot1Style = useAnimatedStyle(() => {
-    const backgroundColor = interpolateColor(
-      colorProgress.value,
-      [0, 0.5, 1],
-      [loaderColor, secondaryColor, loaderColor]
-    );
-    
+  const glowStyle = useAnimatedStyle(() => {
     return {
-      transform: [{ scale: dot1Scale.value }],
-      backgroundColor,
+      opacity: glowOpacity.value,
+      transform: [{ scale: pulseScale.value * 1.2 }]
     };
   });
   
-  const dot2Style = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: dot2Scale.value }],
-      backgroundColor: loaderColor,
-    };
-  });
+  // If not visible, don't render anything
+  if (type !== 'overlay' && !visible) return null;
   
-  const dot3Style = useAnimatedStyle(() => {
-    const backgroundColor = interpolateColor(
-      colorProgress.value,
-      [0, 0.5, 1],
-      [secondaryColor, loaderColor, secondaryColor]
-    );
-    
-    return {
-      transform: [{ scale: dot3Scale.value }],
-      backgroundColor,
-    };
-  });
-  
-  // Inline loader
+  // Render inline loader
   if (type === 'inline') {
-    return visible ? (
-      <View style={styles.inlineContainer}>
-        <Animated.View style={[styles.dot, dot1Style]} />
-        <Animated.View style={[styles.dot, dot2Style, { marginLeft: 6 }]} />
-        <Animated.View style={[styles.dot, dot3Style, { marginLeft: 6 }]} />
-        {text && <Text style={[styles.inlineText, { color: theme.text }]}>{text}</Text>}
-      </View>
-    ) : null;
-  }
-  
-  // Fullscreen loader
-  if (type === 'fullscreen') {
-    return visible ? (
-      <View style={[
-        styles.fullscreenContainer, 
-        { backgroundColor: isDark ? 'rgba(18, 18, 18, 0.9)' : 'rgba(255, 255, 255, 0.9)' }
-      ]}>
-        <Animated.View style={[
-          styles.loaderContent, 
-          containerStyle,
-          { backgroundColor: theme.cardBackground }
-        ]}>
-          <Animated.View style={borderStyle} />
-          
-          <Animated.View style={[styles.iconWrapper, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)' }]}>
-            <Animated.View style={iconStyle}>
-              <Ionicons 
-                name="sparkles" 
-                size={40} 
-                color={loaderColor} 
-              />
-            </Animated.View>
+    return (
+      <View style={[styles.inlineContainer, { backgroundColor: 'transparent' }]}>
+        <Animated.View style={[containerStyle, styles.iconContainer]}>
+          <Animated.View style={[glowStyle, styles.glow, { backgroundColor: theme.primary }]} />
+          <Animated.View style={iconStyle}>
+            <Image 
+              source={isDark 
+                ? require('../assets/images/icon-dark.png') 
+                : require('../assets/images/icon-light.png')
+              } 
+              style={[styles.icon, { width: getIconSize(), height: getIconSize() }]} 
+              resizeMode="contain"
+            />
           </Animated.View>
-          
-          <View style={styles.dotsContainer}>
-            <Animated.View style={[styles.dot, dot1Style]} />
-            <Animated.View style={[styles.dot, dot2Style, { marginLeft: 10 }]} />
-            <Animated.View style={[styles.dot, dot3Style, { marginLeft: 10 }]} />
-          </View>
-          
-          {text && <Text style={[styles.text, { color: theme.text }]}>{text}</Text>}
         </Animated.View>
+        {text && <Text style={[styles.text, { color: theme.text }]}>{text}</Text>}
       </View>
-    ) : null;
+    );
   }
   
-  // Default overlay loader
+  // Render overlay or fullscreen loader
   return (
-    <Modal transparent visible={visible} animationType="none">
+    <Modal
+      transparent={type === 'overlay'}
+      visible={visible}
+      animationType="fade"
+    >
       <View style={[
-        styles.overlayContainer, 
-        { backgroundColor: isDark ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)' }
+        styles.container, 
+        type === 'overlay' ? styles.overlayBackground : { backgroundColor: theme.background }
       ]}>
-        <Animated.View style={[
-          styles.loaderContent, 
-          containerStyle,
-          { backgroundColor: theme.cardBackground }
-        ]}>
-          <Animated.View style={borderStyle} />
-          
-          <Animated.View style={[styles.iconWrapper, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)' }]}>
-            <Animated.View style={iconStyle}>
-              <Ionicons 
-                name="sparkles" 
-                size={40} 
-                color={loaderColor} 
-              />
-            </Animated.View>
+        <Animated.View style={[containerStyle, styles.iconContainer]}>
+          <Animated.View style={[glowStyle, styles.glow, { backgroundColor: theme.primary }]} />
+          <Animated.View style={iconStyle}>
+            <Image 
+              source={isDark 
+                ? require('../assets/images/icon-dark.png') 
+                : require('../assets/images/icon-light.png')
+              } 
+              style={[styles.icon, { width: getIconSize(), height: getIconSize() }]} 
+              resizeMode="contain"
+            />
           </Animated.View>
-          
-          <View style={styles.dotsContainer}>
-            <Animated.View style={[styles.dot, dot1Style]} />
-            <Animated.View style={[styles.dot, dot2Style, { marginLeft: 10 }]} />
-            <Animated.View style={[styles.dot, dot3Style, { marginLeft: 10 }]} />
-          </View>
-          
-          {text && <Text style={[styles.text, { color: theme.text }]}>{text}</Text>}
         </Animated.View>
+        {text && <Text style={[styles.text, { color: theme.text }]}>{text}</Text>}
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  fullscreenContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  overlayContainer: {
+  container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  overlayBackground: {
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
   inlineContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 10,
-  },
-  loaderContent: {
-    borderRadius: 20,
-    padding: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 15,
-    minWidth: 180,
-    minHeight: 180,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  iconWrapper: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    padding: 20,
   },
-  dotsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  iconContainer: {
     justifyContent: 'center',
-    height: 20,
-    marginBottom: 10,
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  dot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+  icon: {
+    width: 80,
+    height: 80,
+  },
+  glow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    opacity: 0.5,
   },
   text: {
     marginTop: 16,
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
-  },
-  inlineText: {
-    marginLeft: 12,
-    fontSize: 14,
-    fontWeight: '500',
   }
 });
